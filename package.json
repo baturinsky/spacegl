@@ -1,0 +1,20 @@
+{
+  "name": "esbuild-boilerplate",
+  "version": "1.0.0",
+  "description": "A ES project",
+  "author": "",
+  "private": true,
+  "scripts": {
+    "start": "node build.js",
+    "build": "node build.js build",
+    "glsl": "npx webpack-glsl-minify src/*.glsl --output sourceOnly",
+    "closure": "npx google-closure-compiler --js=bundle.js --js_output_file=min.js --compilation_level=ADVANCED --language_out=ECMASCRIPT_2020"
+  },
+  "devDependencies": {
+    "esbuild": "^0.11.13",
+    "webpack-glsl-minify": "^1.4.2"
+  },
+  "dependencies": {
+    "closure": "^1.0.3"
+  }
+}

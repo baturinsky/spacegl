@@ -1,0 +1,153 @@
+<canvas id=C width=1900 height=960/>
+<script>
+//@ts-check  
+  const debug = true;
+  const canvasWidth = 1900,
+    canvasHeight = 960;
+  const TEXTURE_2D = 0x0de1,
+    FRAMEBUFFER = 0x8d40,
+    RGBA = 0x1908,
+    ARRAY_BUFFER = 0x8892,
+    FRAGMENT_SHADER = 0x8b30,
+    VERTEX_SHADER = 0x8b31,
+    UNSIGNED_BYTE = 0x1401,
+    FLOAT = 0x1406,
+    TEXTURE_MIN_FILTER = 0x2801,
+    NEAREST = 0x2600,
+    COLOR_ATTACHMENT0 = 0x8ce0,
+    TRIANGLES = 0x0004,
+    TRIANGLE_FAN = 0x0006;
+
+  const prog = `
+  ivec2 F=ivec2(gl_FragCoord.xy);
+  c=texelFetch(T,F,0);
+  float m=c.g,n=-m;
+  for(int i=0;i<9;i++)
+    n+=texelFetch(T,F+ivec2(i%3-1,i/3-1),0).g;
+  c.gra=vec3(
+    n==3.||m==1.&&(n==2. || n == 6.)||abs(atan(float(F.y-${canvasHeight/2}),
+    float(F.x-${canvasWidth/2}))-mod(t/5e2,6.28)+3.14)<2e-4?1:0,
+    max(c.g,c.r*.9),1
+    );`
+
+  let interval;
+
+  function main() {
+
+    clearInterval(interval);
+
+    const gl = document.getElementById("C").getContext("webgl2");
+
+    function createShader(mode, header, body) {
+      let src = `#version 300 es
+precision highp float;
+${header}
+void main() {${body}}`;
+
+      const shader = gl.createShader(mode);
+      gl.shaderSource(shader, src);
+      gl.compileShader(shader);
+
+      if (debug) {
+        const e = gl.getShaderInfoLog(shader);
+        console.log("shader:", e ? e + src : "OK");
+      }
+
+      return shader;
+    }
+
+    function compileProgram(vs, fs) {
+      var program = gl.createProgram();
+      gl.attachShader(program, vs);
+      gl.attachShader(program, fs);
+      gl.linkProgram(program);
+
+      return program;
+    }
+
+    function createTexture() {
+      const targetTexture = gl.createTexture();
+      gl.bindTexture(TEXTURE_2D, targetTexture);
+
+      gl.texImage2D(
+        TEXTURE_2D,
+        0,
+        RGBA,
+        canvasWidth,
+        canvasHeight,
+        0,
+        RGBA,
+        UNSIGNED_BYTE,
+        null
+      );
+
+      gl.texParameteri(TEXTURE_2D, TEXTURE_MIN_FILTER, NEAREST);
+
+      gl.bindTexture(TEXTURE_2D, null);
+
+      return targetTexture;
+    }
+
+    function createBuffer(targetTexture) {
+      const fb = gl.createFramebuffer();
+      gl.bindFramebuffer(FRAMEBUFFER, fb);
+
+      gl.framebufferTexture2D(
+        FRAMEBUFFER,
+        COLOR_ATTACHMENT0,
+        TEXTURE_2D,
+        targetTexture,
+        0
+      );
+
+      return fb;
+    }
+
+    function draw(tex, buf) {
+      gl.bindTexture(TEXTURE_2D, tex);
+      gl.bindFramebuffer(FRAMEBUFFER, buf);
+      gl.drawArrays(TRIANGLES, 0, 6);
+    }
+
+    const vFullScreenQuad = createShader(
+      VERTEX_SHADER,
+      ``,
+      `
+      int i = gl_VertexID;
+      gl_Position = vec4(vec2(i%2*2-1, 1-(i+1)%4/2*2), 0., 1.);
+      `
+    );
+
+    let tx = createTexture();
+    let buffer = createBuffer(tx);
+
+    let tx2 = createTexture();
+    let buffer2 = createBuffer(tx2);
+
+    let t = 0;
+
+    let p = compileProgram(
+      vFullScreenQuad,
+      createShader(
+        FRAGMENT_SHADER, `uniform sampler2D T;uniform float t;out vec4 c;`,
+        prog
+      )
+    );
+    gl.useProgram(p);
+
+    interval = setInterval((_) => {
+      gl.uniform1f(gl.getUniformLocation(p, `t`), t);
+      draw(tx, buffer2);
+
+      [buffer, buffer2] = [buffer2, buffer];
+      [tx, tx2] = [tx2, tx];
+
+      draw(tx, null);
+      t++;
+    }, 16.6);
+  }
+
+  main();
+
+  C.onclick = main;
+</script>

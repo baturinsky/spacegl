@@ -1,0 +1,98 @@
+<canvas id=C></canvas>
+<script>
+  const width = 512, height = 512;
+
+  C.width = width;
+  C.height = height;
+
+  /**@type {WebGL2RenderingContext} */
+  const gl = C.getContext("webgl2");
+  gl.enable(gl.DEPTH_TEST);
+
+  const vFullScreenQuad = glShader(gl.VERTEX_SHADER, `
+void main() {
+  int i = gl_VertexID;
+  gl_Position = vec4(i%2*2-1, 1-(i+1)%4/2*2, float(i%2*2-1)+1., 1.);
+}`
+  );
+
+  const fMain = glShader(gl.FRAGMENT_SHADER, `
+  layout(location = 0) out vec4 c0;
+  void main() {
+    c0 = vec4(sin(gl_FragCoord.x),sin(gl_FragCoord.y),0.,1.);
+  }
+`);
+
+  const fScreen = glShader(gl.FRAGMENT_SHADER, `
+uniform sampler2D T0;
+uniform sampler2D Depth;
+out vec4 c;
+void main() {
+  ivec2 F = ivec2(gl_FragCoord.xy);
+  vec4 a = texelFetch(T0, F, 0);
+  c = a + texelFetch(Depth, F, 0);
+  c.a = 1.;
+}`);
+
+
+  const p1 = glCompile(vFullScreenQuad, fMain);
+  gl.useProgram(p1);
+
+  const fb = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+
+  const color = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, color);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, color, 0);
+
+  const depth = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, depth);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, width, height, 0, gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, null);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, depth, 0);
+
+  gl.bindTexture(gl.TEXTURE_2D, null);
+
+  gl.clear(gl.DEPTH_BUFFER_BIT);
+  gl.drawArrays(gl.TRIANGLES, 0, 6)
+
+
+  const p2 = glCompile(vFullScreenQuad, fScreen);
+  gl.useProgram(p2);
+
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+  gl.activeTexture(gl.TEXTURE0);
+  gl.uniform1i(gl.getUniformLocation(p2, "T0"), 0);
+  gl.bindTexture(gl.TEXTURE_2D, color);  
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+
+  gl.activeTexture(gl.TEXTURE1);
+  gl.uniform1i(gl.getUniformLocation(p2, "Depth"), 1);
+  gl.bindTexture(gl.TEXTURE_2D, depth);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.drawArrays(gl.TRIANGLES, 0, 6)
+
+  function glShader(mode, body) {
+    const shader = gl.createShader(mode);
+    gl.shaderSource(shader, `#version 300 es\nprecision highp float;\n${body}`);
+    gl.compileShader(shader);
+    const e = gl.getShaderInfoLog(shader);
+    if (e) {
+      console.log("shader:", e);
+      console.log(body.split("\n").map((s, i) => `${i + 1}. ${s}`).join("\n"));
+    }
+
+    return shader;
+  }
+
+  function glCompile(vs, fs) {
+    var program = gl.createProgram();
+    gl.attachShader(program, vs);
+    gl.attachShader(program, fs);
+    gl.linkProgram(program);
+    return program;
+  }
+
+</script>
