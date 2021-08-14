@@ -1,4 +1,4 @@
-import { TEXTURE_2D, TEXTURE_MIN_FILTER, NEAREST, FRAMEBUFFER, COLOR_ATTACHMENT0, TRIANGLES, INT, FLOAT, RGBA, RGBA16F, STATIC_DRAW, ARRAY_BUFFER, RENDERBUFFER, UNSIGNED_BYTE, DEPTH_STENCIL_ATTACHMENT, DEPTH_COMPONENT16, DEPTH_ATTACHMENT, DEPTH_TEST, DEPTH_COMPONENT, UNSIGNED_SHORT, DEPTH_STENCIL, DEPTH_COMPONENT24, UNSIGNED_INT, DEPTH_COMPONENT32F, DEPTH24_STENCIL8, DEPTH32F_STENCIL8, FLOAT_32_UNSIGNED_INT_24_8_REV, TEXTURE_MAG_FILTER } from "./glconsts";
+import { TEXTURE_2D, TEXTURE_MIN_FILTER, NEAREST, FRAMEBUFFER, COLOR_ATTACHMENT0, TRIANGLES, INT, FLOAT, RGBA, RGBA16F, STATIC_DRAW, ARRAY_BUFFER, RENDERBUFFER, UNSIGNED_BYTE, DEPTH_STENCIL_ATTACHMENT, DEPTH_COMPONENT16, DEPTH_ATTACHMENT, DEPTH_TEST, DEPTH_COMPONENT, UNSIGNED_SHORT, DEPTH_STENCIL, DEPTH_COMPONENT24, UNSIGNED_INT, DEPTH_COMPONENT32F, DEPTH24_STENCIL8, DEPTH32F_STENCIL8, FLOAT_32_UNSIGNED_INT_24_8_REV, TEXTURE_MAG_FILTER, FLOAT_MAT4 } from "./glconsts";
 
 export let gl: WebGL2RenderingContext;
 const debug = true;
@@ -8,6 +8,10 @@ type ShaderType = (0x8b31 | 0x8b30);
 export function glContext(c: HTMLCanvasElement) {
   gl = c.getContext("webgl2");
   gl.enable(DEPTH_TEST);
+}
+
+export function glEnableAll(){
+  gl.getSupportedExtensions().forEach(ex=>gl.getExtension(ex));
 }
 
 export function gl2Shader(mode: ShaderType, body: string) {
@@ -130,27 +134,32 @@ export function glDrawQuad() {
 
 export function glUniforms(p: WebGLProgram) {
   const uniform: { [field: string]: (...number) => void } = {};
+  const types = {[INT]:"i", [UNSIGNED_INT]:"ui", [FLOAT]:"f", [FLOAT_MAT4]:"Matrix4fv"}
   for (let i = 0; i < gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS); ++i) {
     const info = gl.getActiveUniform(p, i);
-    //console.log(info.name, info.type.toString(16));
-    let suffix = ["i", "ui", "f"][info.type - INT] || "i";
+    console.log(info.name, info.type.toString(16));    
+    let suffix:string = types[info.type] || "i";
     const loc = gl.getUniformLocation(p, info.name);
-    uniform[info.name] = (...args) => gl[`uniform${args.length}${suffix}`](loc, ...args);
+    if(suffix.indexOf("Matrix")>=0)
+      uniform[info.name] = (...args) => gl[`uniform${suffix}`](loc, false, ...args);
+    else
+      uniform[info.name] = (...args) => gl[`uniform${args.length}${suffix}`](loc, ...args);
   }
+  console.log(uniform);
   return uniform;
 }
 
 
-export function glBuffer() {
-  let buffer = gl.createBuffer();
-  gl.bindBuffer(ARRAY_BUFFER, buffer);
+export function glDatabuffer() {
+  return gl.createBuffer();
 }
 
-export function glBufferData(buffer, data) {
+export function glSetDatabuffer(buffer:WebGLBuffer, data:BufferSource) {
+  gl.bindBuffer(ARRAY_BUFFER, buffer);
   gl.bufferData(ARRAY_BUFFER, data, STATIC_DRAW);
 }
 
-export function glAttr(program, name, buffer, itemSize = 2) {
+export function glAttr(program, name, buffer, itemSize = 3) {
   let loc = gl.getAttribLocation(program, name);
   gl.enableVertexAttribArray(loc);
   gl.bindBuffer(ARRAY_BUFFER, buffer);

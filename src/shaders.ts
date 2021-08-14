@@ -1,6 +1,7 @@
 //@ts-nocheck
-import gradient from "./gradient.glsl"
-import main from "./main.glsl"
-import screen from "./screen.glsl"
+import gradient from "./shaders/gradient.glsl"
+import main from "./shaders/main.glsl"
+import screen from "./shaders/screen.glsl"
+import screenQuad from "./shaders/screenQuad.glsl"
 
-export default {main, gradient, screen}
+export default {main, gradient, screen, screenQuad}

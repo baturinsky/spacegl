@@ -1,6 +1,7 @@
 uniform sampler2D T0;
 uniform sampler2D T1;
 uniform sampler2D Depth;
+
 out vec4 c;
 void main() {
   ivec2 F = ivec2(gl_FragCoord.xy);
