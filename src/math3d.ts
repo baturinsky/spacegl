@@ -162,6 +162,14 @@ const test = () => {
   console.log('mmul(mat, inv(mat))', mMul(mat, mInv(mat)));*/
 
   console.log(mTranspose(mat));
+
+  /*const projection2 = m4.perspective(fov, aspect, zNear, zFar)
+  const camera2 = m4.lookAt([0, 0, 0], [0, 0, 1], [0, 1, 0]);
+  const view2 = m4.inverse(camera2);
+  const viewProjection2 = m4.multiply(projection2, view2);
+  
+  console.log("p", mvMul(viewProjection, [0, 0, 10]));*/
+  
 }
 
 test()

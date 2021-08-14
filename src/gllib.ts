@@ -154,9 +154,9 @@ export function glDatabuffer() {
   return gl.createBuffer();
 }
 
-export function glSetDatabuffer(buffer:WebGLBuffer, data:BufferSource) {
-  gl.bindBuffer(ARRAY_BUFFER, buffer);
-  gl.bufferData(ARRAY_BUFFER, data, STATIC_DRAW);
+export function glSetDatabuffer(buffer:WebGLBuffer, data:BufferSource, bindingPoint = ARRAY_BUFFER) {
+  gl.bindBuffer(bindingPoint, buffer);
+  gl.bufferData(bindingPoint, data, STATIC_DRAW);
 }
 
 export function glAttr(program, name, buffer, itemSize = 3) {

@@ -7,5 +7,4 @@ void main() {
   float w = fbm(gl_FragCoord.xy / 200. + vec2(0, t * 10.)) - 0.5;
   w = .5 / (1. + w * w * 4e2);
   c1 = vec4(0, w, 0, 1);
-  gl_FragDepth = 0.3;
 }
