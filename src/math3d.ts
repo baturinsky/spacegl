@@ -1,17 +1,20 @@
 export type Mat = number[];
 export type Vec = [number, number, number];
+export type Vec4 = [number, number, number, number];
 
 export const X = 0, Y = 1, Z = 2;
 export const axis:Vec[] = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
 
 export const arr: (n: number) => number[] = n => [...new Array(n)].map((_, i) => i);
 
+/**Identity matrix */
 export const mI = arr(16).map(n => n % 5 ? 0 : 1);
-export const mMul = (a: Mat, b: Mat) => a.map((_, n) => arr(4).reduce((s, i) => s + a[n - n % 4 + i] * b[n % 4 + i * 4], 0));
+
+export const mMul = (a: Mat, b: Mat) => a.map((_, n) => arr(4).reduce((s, i) => s + b[n - n % 4 + i] * a[n % 4 + i * 4], 0));
 export const mAdd = (a: Mat, b: Mat) => a.map((x, i) => x + b[i]) as Mat;
 export const mSub = (a: Mat, b: Mat) => a.map((x, i) => x - b[i]) as Mat;
 export const mnMul = (m: Mat, n: number) => m.map(x => n * x);
-export const mvMul = (m: Mat, v: Vec) => v3(arr(4).map((i) => v4(v).reduce((s, x, j) => s + x * m[j + i*4], 0)));
+export const mvMul = (m: Mat, v: Vec|Vec4) => arr(4).map((col) => v4(v).reduce((sum, x, row) => sum + x * m[row*4 + col], 0)) as Vec4;
 export const mTrace = a => a[0] + a[5] + a[10] + a[15];
 export const mTranslation = (v) => [
   0, 0, 0, v[X],
@@ -27,8 +30,8 @@ export const mSet = (m, s) => {
   return m;
 }
 
-export const v4 = (v: Vec, w = 1) => [v[0], v[1], v[2], w];
-export const v3 = (v: number[]) => [v[0], v[1], v[2]];
+export const v4 = (v: Vec|Vec4, w = 1) => [v[0], v[1], v[2], v.length>3?v[3]:w];
+export const v3 = (v: Vec|Vec4) => [v[0], v[1], v[2]];
 export const vLen = (v: Vec) => Math.hypot(v[0], v[1], v[2]);
 export const vnMul = (v: Vec, n: number) => [v[0] * n, v[1] * n, v[2] * n] as Vec;
 export const vNorm = (v: Vec, len = 1) => vnMul(v, 1 / vLen(v));
@@ -42,20 +45,20 @@ export const mSum = (a: number, b?: Mat, ...args) =>{
   return args.length?mAdd(v,mSum(...(args as [number, Mat, any]))):v;
 }
 
-export const mLook = (dir: Vec, up:Vec = axis[Y]) => {
+export const mLookTo = (eye:Vec, dir: Vec, up:Vec = axis[Y]) => {
   const z = vNorm(vnMul(dir,-1));
-  const x = vCross(z, up);
+  const x = vNorm(vCross(up, z));
   const y = vCross(x, z);
   return [
     x[X], x[Y], x[Z], 0,
     y[X], y[Y], y[Z], 0,
     z[X], z[Y], z[Z], 0,
-    0, 0, 0, 1
+    eye[X], eye[Y], eye[Z], 1
   ]
 }
 
 export const mLookAt = (eye:Vec, target: Vec, up:Vec = axis[Y]) => {
-  return mLook(vSub(target, eye));
+  return mLookTo(eye, vSub(target, eye), up);
 }
 
 export const mPerspective = (fieldOfViewYInRadians: number, aspect: number, zNear: number, zFar: number) => {
@@ -110,8 +113,8 @@ export const mCross = (v: Vec) => [
 ]
 
 /** Vector cross multiplication */
-//export const vCross = (v: Vec, w: Vec) => [v[Y]*w[Z] - v[Z]*w[Y], v[Z]*w[X] - v[X]*w[Z], v[X]*w[Y] - v[Y]*w[X]] as Vec;
-export const vCross = (v: Vec, w: Vec) => mvMul(mCross(w), v) as Vec;
+export const vCross = (a: Vec, b: Vec) => [a[Y]*b[Z] - a[Z]*b[Y], a[Z]*b[X] - a[X]*b[Z], a[X]*b[Y] - a[Y]*b[X]] as Vec;
+//export const vCross = (v: Vec, w: Vec) => mvMul(mCross(w), v) as Vec;
 
 /** Matrix for rotation around vector by angle a*/
 export function mRot(v: Vec, a: number) {
