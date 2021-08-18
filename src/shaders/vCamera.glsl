@@ -1,11 +1,15 @@
 uniform mat4 camera;
 
-in vec3 position;
+in vec3 vert;
+in vec3 norm;
 
-out vec2 v_texCoord;
+out vec2 uv;
+flat out vec3 normal;
 
-void main() {
-  
-  gl_Position = camera * vec4(position.xyz, 1.);
-  v_texCoord = position.xy*0.5 + vec2(0.5);
+void main() {  
+  vec4 glpos = camera * vec4(vert, 1.);  
+  glpos.y = - glpos.y;
+  gl_Position = glpos / glpos.w;
+  uv = vert.xy*0.5 + vec2(0.5);
+  normal = norm;
 }

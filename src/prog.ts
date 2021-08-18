@@ -1,12 +1,12 @@
 //@ts-check  
 
-import { COLOR_ATTACHMENT0, COLOR_ATTACHMENT1, DEPTH_BUFFER_BIT, ELEMENT_ARRAY_BUFFER, FRAGMENT_SHADER, FRAMEBUFFER, TRIANGLES, UNSIGNED_INT, UNSIGNED_SHORT, VERTEX_SHADER } from "./glconsts";
-import { gl, glFramebuffer, glCompile, gl2Shader, glUniforms, glBindTextures, glTexture, glContext, glDrawQuad, TEX_RGBA, TEX_DEPTHS, glDatabuffer, glSetDatabuffer, glAttr } from "./gllib"
+import * as gc from "./g0/glconst";
+import * as g from "./g0/gl"
+import * as v3 from "./g0/v3"
+import * as m4 from "./g0/m4"
+import {gl} from "./g0/gl";
 import shaders from "./shaders"
-import { arr, mI, mInverse, mLookAt, mLookTo, mMul, mnMul, mPerspective, mSet, mvMul } from "./math3d";
-import * as m4 from "./twgl/m4"
-
-console.log("mset", mSet([1, 2, 3], { 1: 5 }));
+import { combine, pie, Shape, X, Y, Z } from "./g0/misc";
 
 const width = 800, height = 800;
 
@@ -15,25 +15,42 @@ let C = document.getElementById("C") as HTMLCanvasElement;
 C.width = width;
 C.height = height;
 
-glContext(C);
+g.context(C);
 
-let vertBuf = glDatabuffer();
-glSetDatabuffer(vertBuf, new Float32Array([
-  -1, -1, 1, 
-  1, -1, 1, 
-  -1, 1, 1, 
-  1, 1, 1]));
+//console.log(111, m4.transform(m4.translation([0.5,0.5,0]), [1,0,0]));
 
-let indexBuf = glDatabuffer();
-glSetDatabuffer(indexBuf, new Uint32Array([0, 1, 2, 2, 1, 3]), ELEMENT_ARRAY_BUFFER);
+let pp:Shape[] = []
 
-const vFullScreenQuad = gl2Shader(VERTEX_SHADER, shaders.vscreenQuad);
+for(let i=0; i<10000;i++){
+  pp.push(m4.transformShape(m4.translation([Math.random()*10-5,Math.random()*10-5,0]), pie(Math.random()*0.5,1 + Math.random()*5,10)));
+}
 
-let textures = [TEX_RGBA, TEX_RGBA, TEX_DEPTHS].map(
-  (tex) => glTexture(width, height, tex)
+let p = combine(pp);
+
+console.log(p);
+
+let vertBuf = g.databuffer();
+let normBuf = g.databuffer();
+let indexBuf = g.databuffer();
+
+function createArrays(){
+  return [new Float32Array(p.vert.flat()), new Float32Array(p.norm.flat()), new Uint32Array(p.face.flat())]
+}
+
+function setDatabuffers(){
+  let arrays = createArrays();
+  g.setDatabuffer(vertBuf, arrays[0]);  
+  g.setDatabuffer(normBuf, arrays[1]);  
+  g.setDatabuffer(indexBuf, arrays[2], gc.ELEMENT_ARRAY_BUFFER);
+}
+
+setDatabuffers();
+
+let textures = [g.TEX_RGBA, g.TEX_RGBA, g.TEX_DEPTHS].map(
+  (tex) => g.texture(width, height, tex)
 );
 
-let framebuffer = glFramebuffer(textures);
+let framebuffer = g.framebuffer(textures);
 
 let t = 0;
 
@@ -41,67 +58,44 @@ const fov = (50 * Math.PI) / 180;
 const aspect = width / height;
 const zNear = 0.5;
 const zFar = 80;
+const look = m4.lookAt([0,5,10],[0, 0, 0],[0,0,1]);
 
-const perspective = mPerspective(fov, aspect, zNear, zFar);
-const look = mLookAt([0,10,-10],[0, 0, 0],[0,1,0]);
-const camera = mMul(perspective, mInverse(look));
+const perspective = m4.perspective(fov, aspect, zNear, zFar);
+const camera = m4.multiply(perspective, m4.inverse(look));
 
-let pWorld = glCompile(gl2Shader(VERTEX_SHADER, shaders.vCamera), gl2Shader(FRAGMENT_SHADER, `${shaders.fmain}`));
-let pWorldUniform = glUniforms(pWorld);
+let pWorld = g.compile(shaders.vCamera, shaders.fMain);
+let pWorldUniform = g.uniforms(pWorld);
 
-let pScreen = glCompile(vFullScreenQuad, gl2Shader(FRAGMENT_SHADER, shaders.fscreen));
-let pScreenUniform = glUniforms(pScreen);
-
-console.log({perspective, look, camera});
-
-/*const perspective2 = m4.perspective(fov, aspect, zNear, zFar);
-const look2 = m4.lookAt([0,10,-10],[0, 0, 0],[0,1,0]);
-const camera2 = m4.multiply(perspective2, mInverse(look2));
-
-console.log({perspective2, look2, camera2});*/
-
-console.log("zero", mvMul(camera, [0,0,0,1]));
-console.log("one", mvMul(camera, [-1,-1,1,10]));
-
-let ii = [
-  1,0,0,0,
-  0,1,0,0,
-  0,0,1,0,
-  1,10,100,1
-];
-
-
-console.log("zero", mvMul(ii, [0,0,0,1]));
-console.log("one", mvMul(ii, [1,1,1,1]));
-
-console.log(m4.transformPoint(ii, [1,1,1,1]));
-
+let pScreen = g.compile(shaders.vScreenQuad, shaders.fScreen);
+let pScreenUniform = g.uniforms(pScreen);
 
 function loop() {
 
   gl.useProgram(pWorld);
   
-  //pWorldUniform.camera(camera)
   pWorldUniform.camera(camera)
-  glAttr(pWorld, "position", vertBuf, 3);
+  g.attr(pWorld, "vert", vertBuf, 3);
+  g.attr(pWorld, "norm", normBuf, 3);
 
-  gl.bindFramebuffer(FRAMEBUFFER, framebuffer);
+  gl.bindFramebuffer(gc.FRAMEBUFFER, framebuffer);
   gl.drawBuffers([
-    COLOR_ATTACHMENT0,
-    COLOR_ATTACHMENT1
+    gc.COLOR_ATTACHMENT0,
+    gc.COLOR_ATTACHMENT1
   ]);
-  gl.clear(DEPTH_BUFFER_BIT);
+  gl.clear(gc.DEPTH_BUFFER_BIT);
 
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuf);
-  gl.drawElements(TRIANGLES, 6, UNSIGNED_INT, 0);
+  gl.drawElements(gc.TRIANGLES, p.face.length*3, gc.UNSIGNED_INT, 0);
 
   gl.useProgram(pScreen);
-  glBindTextures(textures, [pScreenUniform.T0, pScreenUniform.T1, pScreenUniform.Depth]);
-  gl.bindFramebuffer(FRAMEBUFFER, null);
-  gl.drawArrays(TRIANGLES, 0, 6)
+  g.bindTextures(textures, [pScreenUniform.T0, pScreenUniform.T1, pScreenUniform.Depth]);
+  gl.bindFramebuffer(gc.FRAMEBUFFER, null);
+  gl.drawArrays(gc.TRIANGLES, 0, 6)
 
   t++;
 }
+
+console.log("done")
 
 window.onclick = loop;
 

@@ -1,0 +1,32 @@
+<header>
+  <script>
+    const hashCode = s => s.split('').reduce((a,b)=>a+b.charCodeAt(0),0)
+
+    let gl = document.createElement("canvas").getContext('webgl2')
+
+    let keys = Object.keys(gl.__proto__);
+
+    let s = [], c=[], h = {}, total = "";
+    for (let key of keys/*.sort((a,b)=>gl[a]-gl[b])*/) {
+      if (key.toUpperCase() == key)
+        s.push(`${key}=${gl[key] > 9 ? "0x" + gl[key].toString(16) : gl[key]}`);
+      else {
+        c.push(key);
+        let hash = hashCode(key);
+        hash = [hash % 52, ~~(hash/52) % 52].map(a=>a<0?-a:a).map(a=>String.fromCharCode(a+(a<26?65:71))).join``;
+        while(h[hash])
+          hash += "_";
+        h[hash] = key;
+        total += key;
+        console.log(hash, h[hash]);
+        //console.log(key, );
+      }
+    }
+
+    console.log(total.length, total);
+
+    console.log(c);
+
+    document.body.innerHTML = `<p><pre>export const ${s.join(",\n")};</pre></p>`
+  </script>
+</header>

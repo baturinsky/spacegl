@@ -1,8 +1,8 @@
-const esbuild = require('esbuild');
+import esbuild from 'esbuild';
 
 esbuild.build({
 	entryPoints: ['./src/prog.ts'],
-	outfile: './bundle.js',
+	outfile: './distr/bundle.js',
 	platform: 'browser',
 	bundle: true,
   loader: {".glsl":"text"},

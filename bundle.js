@@ -215,7 +215,6 @@ ${body}`;
       0
     ];
   };
-  var mTranspose = (m) => m.map((_, i) => m[i % 4 * 4 + ~~(i / 4)]);
   function mInverse(A) {
     const AA = mMul(A, A);
     const AAA = mMul(A, AA);
@@ -231,28 +230,6 @@ ${body}`;
     return mnMul(sum, 1 / det);
   }
   var vCross = (a, b) => [a[Y] * b[Z] - a[Z] * b[Y], a[Z] * b[X] - a[X] * b[Z], a[X] * b[Y] - a[Y] * b[X]];
-  var test = () => {
-    let mat = [
-      1,
-      2,
-      3,
-      4,
-      5,
-      6,
-      7,
-      1,
-      9,
-      10,
-      1,
-      12,
-      3,
-      14,
-      15,
-      16
-    ];
-    console.log(mTranspose(mat));
-  };
-  test();
 
   // src/twgl/v3.js
   var VecType = Float32Array;
@@ -271,18 +248,30 @@ ${body}`;
   }
 
   // src/twgl/m4.js
+  var MatType = Float32Array;
   var tempV3a = create();
   var tempV3b = create();
   var tempV3c = create();
-  function transformPoint(m, v, dst) {
-    dst = dst || create();
-    const v0 = v[0];
-    const v1 = v[1];
-    const v2 = v[2];
-    const d = v0 * m[0 * 4 + 3] + v1 * m[1 * 4 + 3] + v2 * m[2 * 4 + 3] + m[3 * 4 + 3];
-    dst[0] = (v0 * m[0 * 4 + 0] + v1 * m[1 * 4 + 0] + v2 * m[2 * 4 + 0] + m[3 * 4 + 0]) / d;
-    dst[1] = (v0 * m[0 * 4 + 1] + v1 * m[1 * 4 + 1] + v2 * m[2 * 4 + 1] + m[3 * 4 + 1]) / d;
-    dst[2] = (v0 * m[0 * 4 + 2] + v1 * m[1 * 4 + 2] + v2 * m[2 * 4 + 2] + m[3 * 4 + 2]) / d;
+  function perspective(fieldOfViewYInRadians, aspect2, zNear2, zFar2, dst) {
+    dst = dst || new MatType(16);
+    const f = 1 / Math.tan(0.5 * fieldOfViewYInRadians);
+    const rangeInv = 1 / (zNear2 - zFar2);
+    dst[0] = f / aspect2;
+    dst[1] = 0;
+    dst[2] = 0;
+    dst[3] = 0;
+    dst[4] = 0;
+    dst[5] = f;
+    dst[6] = 0;
+    dst[7] = 0;
+    dst[8] = 0;
+    dst[9] = 0;
+    dst[10] = (zNear2 + zFar2) * rangeInv;
+    dst[11] = -1;
+    dst[12] = 0;
+    dst[13] = 0;
+    dst[14] = zNear2 * zFar2 * rangeInv * 2;
+    dst[15] = 0;
     return dst;
   }
 
@@ -319,14 +308,16 @@ ${body}`;
   var aspect = width / height;
   var zNear = 0.5;
   var zFar = 80;
-  var perspective = mPerspective(fov, aspect, zNear, zFar);
+  var perspective2 = mPerspective(fov, aspect, zNear, zFar);
   var look = mLookAt([0, 10, -10], [0, 0, 0], [0, 1, 0]);
-  var camera = mMul(perspective, mInverse(look));
+  var camera = mMul(perspective2, mInverse(look));
   var pWorld = glCompile(gl2Shader(VERTEX_SHADER, shaders_default.vCamera), gl2Shader(FRAGMENT_SHADER, `${shaders_default.fmain}`));
   var pWorldUniform = glUniforms(pWorld);
   var pScreen = glCompile(vFullScreenQuad, gl2Shader(FRAGMENT_SHADER, shaders_default.fscreen));
   var pScreenUniform = glUniforms(pScreen);
-  console.log({perspective, look, camera});
+  console.log({perspective: perspective2, look, camera});
+  var perspective22 = perspective(fov, aspect, zNear, zFar);
+  console.log(perspective22);
   console.log("zero", mvMul(camera, [0, 0, 0, 1]));
   console.log("one", mvMul(camera, [-1, -1, 1, 10]));
   var ii = [
@@ -349,7 +340,6 @@ ${body}`;
   ];
   console.log("zero", mvMul(ii, [0, 0, 0, 1]));
   console.log("one", mvMul(ii, [1, 1, 1, 1]));
-  console.log(transformPoint(ii, [1, 1, 1, 1]));
   function loop() {
     gl.useProgram(pWorld);
     pWorldUniform.camera(camera);

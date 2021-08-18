@@ -1,11 +1,11 @@
 //@ts-nocheck
 import gradient from "./shaders/gradient.glsl"
-import fmain from "./shaders/fmain.glsl"
-import fscreen from "./shaders/fscreen.glsl"
-import vscreenQuad from "./shaders/vscreenQuad.glsl"
-import vasIs from "./shaders/vasIs.glsl"
+import vAsIs from "./shaders/vAsIs.glsl"
+import fMain from "./shaders/fMain.glsl"
+import fScreen from "./shaders/fScreen.glsl"
+import vScreenQuad from "./shaders/vScreenQuad.glsl"
 import vCamera from "./shaders/vCamera.glsl"
 
-const shaders = {fmain, gradient, fscreen, vscreenQuad, vasIs, vCamera};
+const shaders = {fMain, vCamera, fScreen, vScreenQuad};
 
 export default shaders;
