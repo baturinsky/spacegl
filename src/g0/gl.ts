@@ -19,7 +19,6 @@ export function shader(mode: ShaderType, body: string) {
     `#version 300 es
 precision highp float;
 precision highp int;
-precision mediump sampler3D;
 
 ${body}`;
 

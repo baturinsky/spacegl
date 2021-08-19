@@ -1,16 +1,32 @@
 export type Mat = number[];
 import * as v3 from "./v3"
-import { Vec } from "./v3"
-import { arr, X, Y, Z, Shape } from "./misc"
+import { Vec, Vec4 } from "./v3"
+import { arr, X, Y, Z, Shape, VERT, NORM, FACE } from "./misc"
 
 const UP = v3.axis[Y];
 
-export const transform = (m: Mat, v: v3.Vec | v3.Vec4) => {
+/*export const transform = (m: Mat, v: v3.Vec | v3.Vec4) => {
   v = v3.v4(v);
-  return arr(3).map((col) => v.reduce((sum, x, row) => sum + x * m[row + col*4], 0)) as Vec;
-};
+  return v3.v3(arr(4).map((col) => v.reduce((sum, x, row) => sum + x * m[row + col * 4], 0)) as Vec4);
+};*/
 
-export const transformShape = (m: Mat, shape: Shape) => ({ ...shape, vert: shape.vert.map(v => transform(m, v)) } as Shape);
+function transform(m: Mat, v: Vec) {
+  const [v0, v1, v2] = v;
+  const d = v0 * m[0 * 4 + 3] + v1 * m[1 * 4 + 3] + v2 * m[2 * 4 + 3] + m[3 * 4 + 3];
+
+  return [
+    (v0 * m[0 * 4 + 0] + v1 * m[1 * 4 + 0] + v2 * m[2 * 4 + 0] + m[3 * 4 + 0]) / d,
+    (v0 * m[0 * 4 + 1] + v1 * m[1 * 4 + 1] + v2 * m[2 * 4 + 1] + m[3 * 4 + 1]) / d,
+    (v0 * m[0 * 4 + 2] + v1 * m[1 * 4 + 2] + v2 * m[2 * 4 + 2] + m[3 * 4 + 2]) / d
+  ] as Vec;
+}
+
+
+export const transformShape = (m: Mat, shape: Shape) => [
+  shape[VERT].map(v => transform(m, v)),
+  shape[FACE],
+  shape[NORM].map(v => transformDirection(m, v)),
+] as Shape;
 
 export const multiply = (a: Mat, b: Mat) => a.map((_, n) => arr(4).reduce((s, i) => s + b[n - n % 4 + i] * a[n % 4 + i * 4], 0));
 export const add = (a: Mat, b: Mat) => a.map((x, i) => x + b[i]) as Mat;
@@ -96,14 +112,39 @@ export const perspective = (fieldOfViewYInRadians: number, aspect: number, zNear
   ]
 }
 
-export function rotation(v: Vec, a: number) {
-  const K = cross(v);
-  return sum(1, identity, Math.sin(a), K, 1 - Math.cos(a), multiply(K, K));
+export function axisRotation(axis: Vec, angleInRadians: number) {
+
+  let [x, y, z] = axis;
+  const n = Math.sqrt(x * x + y * y + z * z);
+  x /= n;
+  y /= n;
+  z /= n;
+  const c = Math.cos(angleInRadians);
+  const s = Math.sin(angleInRadians);
+  const oneMinusCosine = 1 - c;
+
+  return [
+    x * x + (1 - x * x) * c, x * y * oneMinusCosine + z * s, x * z * oneMinusCosine - y * s, 0,
+    x * y * oneMinusCosine - z * s, y * y + (1 - y * y) * c, y * z * oneMinusCosine + x * s, 0,
+    x * z * oneMinusCosine + y * s, y * z * oneMinusCosine - x * s, z * z + (1 - z * z) * c, 0,
+    0, 0, 0, 1
+  ]
 }
 
-export const translation = (v:Vec) => [
-  1, 0, 0, v[X],
-  0, 1, 0, v[Y],
-  0, 0, 1, v[Z],
-  0, 0, 0, 1
+export function transformDirection(m, v) {
+
+  const [v0, v1, v2] = v;
+
+  return [
+    v0 * m[0 * 4 + 0] + v1 * m[1 * 4 + 0] + v2 * m[2 * 4 + 0],
+    v0 * m[0 * 4 + 1] + v1 * m[1 * 4 + 1] + v2 * m[2 * 4 + 1],
+    v0 * m[0 * 4 + 2] + v1 * m[1 * 4 + 2] + v2 * m[2 * 4 + 2]
+  ];
+}
+
+export const translation = (v: Vec) => [
+  1, 0, 0, 0,
+  0, 1, 0, 0,
+  0, 0, 1, 0,
+  v[X], v[Y], v[Z], 1
 ]
