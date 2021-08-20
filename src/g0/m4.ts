@@ -1,7 +1,7 @@
 export type Mat = number[];
 import * as v3 from "./v3"
 import { Vec, Vec4 } from "./v3"
-import { arr, X, Y, Z, Shape, VERT, NORM, FACE } from "./misc"
+import { arr, X, Y, Z, Shape, VERT, NORM, FACE, ETC } from "./misc"
 
 const UP = v3.axis[Y];
 
@@ -10,22 +10,12 @@ const UP = v3.axis[Y];
   return v3.v3(arr(4).map((col) => v.reduce((sum, x, row) => sum + x * m[row + col * 4], 0)) as Vec4);
 };*/
 
-function transform(m: Mat, v: Vec) {
-  const [v0, v1, v2] = v;
-  const d = v0 * m[0 * 4 + 3] + v1 * m[1 * 4 + 3] + v2 * m[2 * 4 + 3] + m[3 * 4 + 3];
-
-  return [
-    (v0 * m[0 * 4 + 0] + v1 * m[1 * 4 + 0] + v2 * m[2 * 4 + 0] + m[3 * 4 + 0]) / d,
-    (v0 * m[0 * 4 + 1] + v1 * m[1 * 4 + 1] + v2 * m[2 * 4 + 1] + m[3 * 4 + 1]) / d,
-    (v0 * m[0 * 4 + 2] + v1 * m[1 * 4 + 2] + v2 * m[2 * 4 + 2] + m[3 * 4 + 2]) / d
-  ] as Vec;
-}
-
 
 export const transformShape = (m: Mat, shape: Shape) => [
   shape[VERT].map(v => transform(m, v)),
   shape[FACE],
-  shape[NORM].map(v => transformDirection(m, v)),
+  shape[NORM].map(v => transformDirection(m, v)) as Vec[],
+  shape[ETC]
 ] as Shape;
 
 export const multiply = (a: Mat, b: Mat) => a.map((_, n) => arr(4).reduce((s, i) => s + b[n - n % 4 + i] * a[n % 4 + i * 4], 0));
@@ -141,6 +131,18 @@ export function transformDirection(m, v) {
     v0 * m[0 * 4 + 2] + v1 * m[1 * 4 + 2] + v2 * m[2 * 4 + 2]
   ];
 }
+
+export function transform(m: Mat, v: Vec) {
+  const [v0, v1, v2] = v;
+  const d = v0 * m[0 * 4 + 3] + v1 * m[1 * 4 + 3] + v2 * m[2 * 4 + 3] + m[3 * 4 + 3];
+
+  return [
+    (v0 * m[0 * 4 + 0] + v1 * m[1 * 4 + 0] + v2 * m[2 * 4 + 0] + m[3 * 4 + 0]) / d,
+    (v0 * m[0 * 4 + 1] + v1 * m[1 * 4 + 1] + v2 * m[2 * 4 + 1] + m[3 * 4 + 1]) / d,
+    (v0 * m[0 * 4 + 2] + v1 * m[1 * 4 + 2] + v2 * m[2 * 4 + 2] + m[3 * 4 + 2]) / d
+  ] as Vec;
+}
+
 
 export const translation = (v: Vec) => [
   1, 0, 0, 0,

@@ -128,46 +128,61 @@ ${body}`;
   var VERT = 0;
   var FACE = 1;
   var NORM = 2;
+  var ETC = 3;
+  function calculateNormals(s) {
+    s[NORM] = new Array(s[VERT].length);
+    for (let i = 0; i < s[FACE].length; i++) {
+      let verts = s[FACE][i].map((v2) => s[VERT][v2]);
+      s[NORM][s[FACE][i][2]] = norm(cross(sub(verts[1], verts[0]), sub(verts[2], verts[0])));
+    }
+  }
   function pie(r, h, sectors) {
-    let vert = [], norm2 = [], face = [];
-    const bottom = sectors * 2, top = sectors * 2 + 1;
-    vert[bottom] = [0, 0, 0];
-    norm2[bottom] = [0, 0, -1];
-    vert[top] = [0, 0, h];
-    norm2[top] = [0, 0, 1];
+    let vert = [], face = [], etc = [];
+    const foundation = 0, roof = 1, upper = sectors + 1;
+    vert[foundation] = [0, 0, 0];
+    vert[roof] = [0, 0, h];
+    etc[foundation] = [0, -1, 0, 0];
+    etc[roof] = [0, 2, 0, 0];
     const angleStep = Math.PI * 2 / sectors;
-    for (let i = 0; i < sectors; i++) {
-      let a = angle2d(angleStep * i);
-      let an = angle2d(angleStep * (i + 0.5));
+    for (let i = 2; i < sectors + 3; i++) {
+      let a = angle2d(angleStep * (i - 2));
       let x = r * a[X];
       let y = r * a[Y];
       vert[i] = [x, y, 0];
-      vert[i + sectors] = [x, y, h];
-      norm2[i] = norm2[i + sectors] = [an[X], an[Y], 0];
+      vert[i + upper] = [x, y, h];
+      etc[i] = [i, 0, 0, 0];
+      etc[i + upper] = [i, 1, 0, 0];
     }
-    for (let i = 0; i < sectors; i++) {
-      let j = (i + 1) % sectors;
-      face[i * 4] = [i, j, bottom];
-      face[i * 4 + 1] = [i + sectors, j + sectors, top];
-      face[i * 4 + 2] = [j, j + sectors, i];
-      face[i * 4 + 3] = [i + sectors, j + sectors, i];
+    for (let i = 0; i < sectors + 1; i++) {
+      let left = i + 2;
+      let right = (i + 1) % upper + 2;
+      face[i * 4] = [right, left, foundation];
+      face[i * 4 + 1] = [left + upper, right + upper, roof];
+      face[i * 4 + 2] = [right, right + upper, left];
+      face[i * 4 + 3] = [right + upper, left + upper, left];
     }
-    return [vert, face, norm2];
+    return [vert, face, null, etc];
   }
   function shapesToBuffers(shapes) {
     let l = shapes.length;
     let count = new Array(l + 1);
-    count[0] = [0, 0, 0];
+    count[0] = [0, 0];
     for (let i = 0; i < l; i++) {
-      count[i + 1] = count[i].map((v, j) => v + shapes[i][j].length);
+      count[i + 1] = count[i].map((v2, j) => v2 + shapes[i][j].length);
     }
-    let bufs = [new Float32Array(count[l][VERT] * 3), new Uint32Array(count[l][FACE] * 3), new Float32Array(count[l][NORM] * 3)];
+    let bufs = [
+      new Float32Array(count[l][VERT] * 3),
+      new Uint32Array(count[l][FACE] * 3),
+      new Float32Array(count[l][VERT] * 3),
+      new Float32Array(count[l][VERT] * 4)
+    ];
     shapes.forEach((shape, shapei) => {
-      for (let layer of [VERT, FACE, NORM]) {
+      for (let slayer in shape) {
+        let layer = ~~slayer;
         shape[layer].forEach((el, i) => {
           if (layer == FACE)
             el = addn(el, count[shapei][VERT]);
-          bufs[layer].set(el, (count[shapei][layer] + i) * 3);
+          bufs[layer].set(el, (count[shapei][layer == FACE ? FACE : VERT] + i) * (layer == ETC ? 4 : 3));
         });
       }
     });
@@ -176,37 +191,29 @@ ${body}`;
 
   // src/g0/v3.ts
   var axis = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
-  var len = (v) => Math.hypot(v[0], v[1], v[2]);
-  var scale = (v, n) => [v[0] * n, v[1] * n, v[2] * n];
-  var norm = (v, l = 1) => scale(v, l / len(v));
-  var addn = (v, n) => [v[0] + n, v[1] + n, v[2] + n];
-  var sub = (v, w) => [v[0] - w[0], v[1] - w[1], v[2] - w[2]];
+  var len = (v2) => Math.hypot(v2[0], v2[1], v2[2]);
+  var scale = (v2, n) => [v2[0] * n, v2[1] * n, v2[2] * n];
+  var norm = (v2, l = 1) => scale(v2, l / len(v2));
+  var addn = (v2, n) => [v2[0] + n, v2[1] + n, v2[2] + n];
+  var sub = (v2, w) => [v2[0] - w[0], v2[1] - w[1], v2[2] - w[2]];
   var cross = (a, b) => [a[Y] * b[Z] - a[Z] * b[Y], a[Z] * b[X] - a[X] * b[Z], a[X] * b[Y] - a[Y] * b[X]];
   var angle2d = (a) => [Math.cos(a), Math.sin(a)];
 
   // src/g0/m4.ts
   var UP = axis[Y];
-  function transform(m, v) {
-    const [v0, v1, v2] = v;
-    const d = v0 * m[0 * 4 + 3] + v1 * m[1 * 4 + 3] + v2 * m[2 * 4 + 3] + m[3 * 4 + 3];
-    return [
-      (v0 * m[0 * 4 + 0] + v1 * m[1 * 4 + 0] + v2 * m[2 * 4 + 0] + m[3 * 4 + 0]) / d,
-      (v0 * m[0 * 4 + 1] + v1 * m[1 * 4 + 1] + v2 * m[2 * 4 + 1] + m[3 * 4 + 1]) / d,
-      (v0 * m[0 * 4 + 2] + v1 * m[1 * 4 + 2] + v2 * m[2 * 4 + 2] + m[3 * 4 + 2]) / d
-    ];
-  }
-  var transformShape = (m, shape) => [
-    shape[VERT].map((v) => transform(m, v)),
+  var transformShape = (m2, shape) => [
+    shape[VERT].map((v2) => transform(m2, v2)),
     shape[FACE],
-    shape[NORM].map((v) => transformDirection(m, v))
+    shape[NORM].map((v2) => transformDirection(m2, v2)),
+    shape[ETC]
   ];
   var multiply = (a, b) => a.map((_, n) => arr(4).reduce((s, i) => s + b[n - n % 4 + i] * a[n % 4 + i * 4], 0));
   var add = (a, b) => a.map((x, i) => x + b[i]);
-  var scale2 = (m, n) => m.map((x) => n * x);
+  var scale2 = (m2, n) => m2.map((x) => n * x);
   var trace = (a) => a[0] + a[5] + a[10] + a[15];
   var sum = (a, b, ...args) => {
-    const v = scale2(b, a);
-    return args.length ? add(v, sum(...args)) : v;
+    const v2 = scale2(b, a);
+    return args.length ? add(v2, sum(...args)) : v2;
   };
   function inverse(A) {
     const AA = multiply(A, A);
@@ -297,15 +304,24 @@ ${body}`;
       1
     ];
   }
-  function transformDirection(m, v) {
-    const [v0, v1, v2] = v;
+  function transformDirection(m2, v2) {
+    const [v0, v1, v22] = v2;
     return [
-      v0 * m[0 * 4 + 0] + v1 * m[1 * 4 + 0] + v2 * m[2 * 4 + 0],
-      v0 * m[0 * 4 + 1] + v1 * m[1 * 4 + 1] + v2 * m[2 * 4 + 1],
-      v0 * m[0 * 4 + 2] + v1 * m[1 * 4 + 2] + v2 * m[2 * 4 + 2]
+      v0 * m2[0 * 4 + 0] + v1 * m2[1 * 4 + 0] + v22 * m2[2 * 4 + 0],
+      v0 * m2[0 * 4 + 1] + v1 * m2[1 * 4 + 1] + v22 * m2[2 * 4 + 1],
+      v0 * m2[0 * 4 + 2] + v1 * m2[1 * 4 + 2] + v22 * m2[2 * 4 + 2]
     ];
   }
-  var translation = (v) => [
+  function transform(m2, v2) {
+    const [v0, v1, v22] = v2;
+    const d = v0 * m2[0 * 4 + 3] + v1 * m2[1 * 4 + 3] + v22 * m2[2 * 4 + 3] + m2[3 * 4 + 3];
+    return [
+      (v0 * m2[0 * 4 + 0] + v1 * m2[1 * 4 + 0] + v22 * m2[2 * 4 + 0] + m2[3 * 4 + 0]) / d,
+      (v0 * m2[0 * 4 + 1] + v1 * m2[1 * 4 + 1] + v22 * m2[2 * 4 + 1] + m2[3 * 4 + 1]) / d,
+      (v0 * m2[0 * 4 + 2] + v1 * m2[1 * 4 + 2] + v22 * m2[2 * 4 + 2] + m2[3 * 4 + 2]) / d
+    ];
+  }
+  var translation = (v2) => [
     1,
     0,
     0,
@@ -318,26 +334,26 @@ ${body}`;
     0,
     1,
     0,
-    v[X],
-    v[Y],
-    v[Z],
+    v2[X],
+    v2[Y],
+    v2[Z],
     1
   ];
 
   // src/shaders/fMain.glsl
-  var fMain_default = "uniform float t;\n\nflat in vec3 normal;\nin vec2 uv;\n\nlayout(location = 0) out vec4 c0;\nlayout(location = 1) out vec4 c1;\n\nvoid main() {\n  //c0 = vec4(normal*0.5+0.5, 1.);  \n  float light = dot(normal, normalize(vec3(-1.,-2.,3.)));\n  c0 = vec4(vec3(light), 1.);\n  c1 = vec4(sin(gl_FragCoord.y*.5)+.5, 0., 0., 1.);\n}\n";
+  var fMain_default = "uniform float t;\n\nflat in vec3 normal;\nin vec4 uv;\n\nlayout(location = 0) out vec4 c0;\nlayout(location = 1) out vec4 c1;\n\nvoid main() {\n  //c0 = vec4(normal*0.5+0.5, 1.);  \n  float light = dot(normal, normalize(vec3(-1.,-2.,3.)));\n  //c0 = vec4(vec3(light), 1.);\n  //x = fract(uvw.x);\n  float x;\n  if(uv.y>1.)\n    x = fract(uv.x / (2.-uv.y));\n  else\n    x = fract(uv.x);\n  c0 = vec4(x, fract(uv.y), uv.z, 1.);\n  //c1 = vec4(sin(gl_FragCoord.y*.5)+.5, 0., 0., 1.);\n  c1 = vec4(gl_FrontFacing?0.:1.,0.,0.,0.);\n}\n";
 
   // src/shaders/fScreen.glsl
-  var fScreen_default = "uniform sampler2D T0;\nuniform sampler2D T1;\nuniform sampler2D Depth;\n\nout vec4 c;\n\nint bayer[16] = int[] (1, 9, 3, 11, 13, 5, 15, 7, 4, 12, 2, 10, 16, 8, 14, 6);\nint b64[64] = int[] (1,33,9,41,3,35,11,43,49,17,57,25,51,19,59,27,13,45,5,37,15,47,7,39,61,29,53,21,63,31,55,23,4,36,12,44,2,34,10,42,52,20,60,28,50,18,58,26,16,48,8,40,14,46,6,38,64,32,56,24,62,30,54,22);\n\nvoid main() {\n  ivec2 F = ivec2(gl_FragCoord.xy);\n  c = vec4(0.);\n  float depth = texelFetch(Depth, F, 0).r;\n  c.rgb = vec3(texelFetch(T0, F, 0).r*65. > float(b64[F.y%8*8 + F.x%8])?1.:0.);\n  //c.rgb = vec3(texelFetch(T0, F, 0).r*65. > float(F.y/1000%65));\n  //c.rgb = vec3(1. + sin(float(F.y)*2000.));\n  float diff = 0.;\n  for(int i = 0; i < 4; i++) {\n    float edge = texelFetch(Depth, F + ivec2(i % 2, i / 2), 0).r + texelFetch(Depth, F - ivec2(i % 2, i / 2), 0).r - depth * 2.;\n    diff += abs(edge);\n  }\n  if(diff > .00005)\n    c.rgb = vec3(0.);\n  if(depth == 1.)\n    c.rgb = vec3(1.);\n  c.a = 1.;\n}";
+  var fScreen_default = "uniform sampler2D T0;\nuniform sampler2D T1;\nuniform sampler2D Depth;\n\nout vec4 c;\n\nint bayer[16] = int[] (1, 9, 3, 11, 13, 5, 15, 7, 4, 12, 2, 10, 16, 8, 14, 6);\nint b64[64] = int[] (1, 33, 9, 41, 3, 35, 11, 43, 49, 17, 57, 25, 51, 19, 59, 27, 13, 45, 5, 37, 15, 47, 7, 39, 61, 29, 53, 21, 63, 31, 55, 23, 4, 36, 12, 44, 2, 34, 10, 42, 52, 20, 60, 28, 50, 18, 58, 26, 16, 48, 8, 40, 14, 46, 6, 38, 64, 32, 56, 24, 62, 30, 54, 22);\n\nvoid main() {\n  ivec2 F = ivec2(gl_FragCoord.xy);\n  c = vec4(0.);\n  float depth = texelFetch(Depth, F, 0).r;\n  float lut;\n\n  if(depth == 1.) {\n    lut = 1.;\n  } else {\n    float lit = texelFetch(T0, F, 0).r;\n\n    float diff = 0.;\n    for(int i = 0; i < 8; i++) {\n      int step = i/4;\n      float edge = texelFetch(Depth, F + ivec2(i % 2, i % 4 / 2)*step, 0).r + texelFetch(Depth, F - ivec2(i % 2, i % 4 / 2)*step, 0).r - depth * 2.;\n      diff += abs(edge);\n    }\n\n    if(diff > .00007) {\n      //lut = lit>0.1?0.:1.;\n      lut = 0.;\n    } else {\n      //lut = lit * 65. > float(b64[F.y % 8 * 8 + F.x % 8]) ? 1. : 0.;\n      lut = lit;\n    }\n  }\n\n  c.rgb = vec3(lut);\n\n  c.rgb = texelFetch(T0, F, 0).rgb;\n\n  if(texelFetch(T1, F, 0).r == 1.)\n    c.rgb = vec3(0., 0., 1.);\n  c.a = 1.;\n}";
 
   // src/shaders/vScreenQuad.glsl
   var vScreenQuad_default = "void main() {\n  int i = gl_VertexID;\n  gl_Position = vec4(i%2*2-1, 1-(i+1)%4/2*2, 0., 1.);\n}";
 
-  // src/shaders/vCamera.glsl
-  var vCamera_default = "uniform mat4 camera;\r\n\r\nin vec3 vert;\r\nin vec3 norm;\r\n\r\nout vec2 uv;\r\nflat out vec3 normal;\r\n\r\nvoid main() {  \r\n  vec4 glpos = camera * vec4(vert, 1.);  \r\n  glpos.y = - glpos.y;\r\n  gl_Position = glpos / glpos.w;\r\n  uv = vert.xy*0.5 + vec2(0.5);\r\n  normal = norm;\r\n}";
+  // src/shaders/vMain.glsl
+  var vMain_default = "uniform mat4 camera;\r\n\r\nin vec3 vert;\r\nin vec3 norm;\r\nin vec4 etc;\r\n\r\nout vec4 uv;\r\nflat out vec3 normal;\r\n\r\nvoid main() {\r\n  vec4 glpos = camera * vec4(vert, 1.);\r\n  glpos.y = -glpos.y;\r\n  gl_Position = glpos / glpos.w;\r\n  //int i = gl_VertexID % 6;\r\n  //uv = vec2(foo[i * 2], foo[i * 2 + 1]);\r\n  uv = etc;\r\n  normal = norm;\r\n}";
 
   // src/shaders.ts
-  var shaders = {fMain: fMain_default, vCamera: vCamera_default, fScreen: fScreen_default, vScreenQuad: vScreenQuad_default};
+  var shaders = {fMain: fMain_default, vMain: vMain_default, fScreen: fScreen_default, vScreenQuad: vScreenQuad_default};
   var shaders_default = shaders;
 
   // src/prog.ts
@@ -347,12 +363,14 @@ ${body}`;
   C.width = width;
   C.height = height;
   context(C);
-  console.log(Date.now());
+  var startTime = Date.now();
   var pp = [];
   function generate() {
-    for (let i = 0; i < 1e5; i++) {
-      let m = multiply(translation([Math.random() * 200 - 100, Math.random() * 100, 0]), axisRotation([0, 0, 1], Math.random() * 6));
-      pp.push(transformShape(m, pie(Math.random() + 0.3, 1 + Math.random() ** 7 * 5, ~~(Math.random() * 10) + 3)));
+    for (let i = 0; i < 1e4; i++) {
+      let mat = multiply(translation([Math.random() * 200 - 100, Math.random() * 100, 0]), axisRotation([0, 0, 1], Math.random() * 6));
+      let p = pie(Math.random() + 0.3, 1 + Math.random() ** 7 * 5, ~~(Math.random() * 10) + 3);
+      calculateNormals(p);
+      pp.push(transformShape(mat, p));
     }
   }
   generate();
@@ -360,25 +378,26 @@ ${body}`;
   var vertBuf = databuffer();
   var normBuf = databuffer();
   var indexBuf = databuffer();
+  var etcBuf = databuffer();
   function setDatabuffers() {
     setDatabuffer(vertBuf, arrays[0]);
     setDatabuffer(indexBuf, arrays[1], ELEMENT_ARRAY_BUFFER);
     setDatabuffer(normBuf, arrays[2]);
+    setDatabuffer(etcBuf, arrays[3]);
   }
-  console.log(arrays);
   setDatabuffers();
-  console.log(Date.now());
+  console.log(`${Date.now() - startTime} ms ${arrays[1].length / 3} faces`);
   var textures = [TEX_RGBA, TEX_RGBA, TEX_DEPTHS].map((tex) => texture(width, height, tex));
   var framebuffer2 = framebuffer(textures);
   var t = 0;
   var fov = 50 * Math.PI / 180;
   var aspect = width / height;
-  var zNear = 0.5;
+  var zNear = 2;
   var zFar = 200;
   var look = lookAt([0, -10, 20], [0, 30, 0], [0, 0, 1]);
   var perspective2 = perspective(fov, aspect, zNear, zFar);
   var camera = multiply(perspective2, inverse(look));
-  var pWorld = compile(shaders_default.vCamera, shaders_default.fMain);
+  var pWorld = compile(shaders_default.vMain, shaders_default.fMain);
   var pWorldUniform = uniforms(pWorld);
   var pScreen = compile(shaders_default.vScreenQuad, shaders_default.fScreen);
   var pScreenUniform = uniforms(pScreen);
@@ -387,6 +406,7 @@ ${body}`;
     pWorldUniform.camera(camera);
     attr(pWorld, "vert", vertBuf, 3);
     attr(pWorld, "norm", normBuf, 3);
+    attr(pWorld, "etc", etcBuf, 4);
     gl.bindFramebuffer(FRAMEBUFFER, framebuffer2);
     gl.drawBuffers([
       COLOR_ATTACHMENT0,

@@ -1,39 +1,55 @@
-import { angle2d, v3, Vec, addn } from "./v3";
+//@ts-check
+
+import { Vec, Vec4 } from "./v3";
+import * as v from "./v3";
 
 export const X = 0, Y = 1, Z = 2;
 export const arr: (n: number) => number[] = n => [...new Array(n)].map((_, i) => i);
-export const VERT = 0, FACE = 1, NORM = 2;
+export const VERT = 0, FACE = 1, NORM = 2, ETC = 3;
 
-export type Shape = [Vec[], Vec[], Vec[]]
+export type Shape = [Vec[], Vec[], Vec[]?, Vec4[]?]
+
+export function calculateNormals(s: Shape) {
+  s[NORM] = new Array(s[VERT].length);
+  for (let i = 0; i < s[FACE].length; i++) {
+    let verts = s[FACE][i].map(v => s[VERT][v]);
+    s[NORM][s[FACE][i][2]] = v.norm(v.cross(v.sub(verts[1], verts[0]), v.sub(verts[2], verts[0])));
+  }
+}
 
 export function pie(r: number, h: number, sectors: number) {
-  let vert: Vec[] = [], norm: Vec[] = [], face: Vec[] = [];
-  const bottom = sectors * 2, top = sectors * 2 + 1;
-  vert[bottom] = [0, 0, 0];
-  norm[bottom] = [0, 0, -1];
+  let vert: Vec[] = [], face: Vec[] = [], etc: Vec4[] = [];
+  const foundation = 0, roof = 1, upper=sectors+1;
+  
+  vert[foundation] = [0, 0, 0];
+  vert[roof] = [0, 0, h];
 
-  vert[top] = [0, 0, h];
-  norm[top] = [0, 0, 1];
+  etc[foundation] = [0,-1,0,0];
+  etc[roof] = [0,2,0,0];
 
   const angleStep = Math.PI * 2 / sectors;
 
-  for (let i = 0; i < sectors; i++) {
-    let a = angle2d(angleStep * i)
-    let an = angle2d(angleStep * (i + 0.5))
+  for (let i = 2; i < sectors+3; i++) {
+    let a = v.angle2d(angleStep * (i-2))
     let x = r * a[X];
     let y = r * a[Y];
     vert[i] = [x, y, 0];
-    vert[i + sectors] = [x, y, h];
-    norm[i] = norm[i + sectors] = [an[X], an[Y], 0]
+    vert[i + upper] = [x, y, h];    
+
+    etc[i] = [i,0,0,0];
+    etc[i + upper] = [i,1,0,0];
   }
-  for (let i = 0; i < sectors; i++) {
-    let j = (i + 1) % sectors;
-    face[i * 4] = [i, j, bottom]; //bottom
-    face[i * 4 + 1] = [i + sectors, j + sectors, top]; //top
-    face[i * 4 + 2] = [j, j + sectors, i];
-    face[i * 4 + 3] = [i + sectors, j + sectors, i];
+
+  for (let i = 0; i < sectors+1; i++) {
+    let left = i + 2
+    let right = (i + 1) % upper + 2;
+    face[i * 4] = [right, left, foundation]; //bottom
+    face[i * 4 + 1] = [left + upper, right + upper, roof]; //top
+    face[i * 4 + 2] = [right, right + upper, left];
+    face[i * 4 + 3] = [right + upper, left + upper, left];
   }
-  return [vert, face, norm] as Shape;
+  
+  return [vert, face, null, etc] as Shape;
 }
 
 export function combine(shapes: Shape[]) {
@@ -41,7 +57,7 @@ export function combine(shapes: Shape[]) {
   return [
     flat(shapes.map(shape => shape[VERT])),
     flat(shapes.map(shape => {
-      let r = shape[FACE].map(f => addn(f, total));
+      let r = shape[FACE].map(f => v.addn(f, total));
       total += shape[VERT].length;
       return r;
     })),
@@ -87,20 +103,27 @@ export function flat(arr, makeArray: Function = n => new Array(n)) {
 }
 
 export function shapesToBuffers(shapes: Shape[]) {
-  
+ 
   let l = shapes.length;
-  let count = new Array(l+1);
-  count[0] = [0, 0, 0];
+  let count = new Array(l + 1);
+  count[0] = [0, 0];
   for (let i = 0; i < l; i++) {
-    count[i+1] = count[i].map((v, j) => v + shapes[i][j].length)
+    count[i + 1] = count[i].map((v, j) => v + shapes[i][j].length)
   }
-  let bufs = [new Float32Array(count[l][VERT] * 3), new Uint32Array(count[l][FACE] * 3), new Float32Array(count[l][NORM] * 3)]
+  let bufs = [
+    new Float32Array(count[l][VERT] * 3), 
+    new Uint32Array(count[l][FACE] * 3), 
+    new Float32Array(count[l][VERT] * 3),
+    new Float32Array(count[l][VERT] * 4),
+  ]
+  
   shapes.forEach((shape, shapei) => {
-    for (let layer of [VERT, FACE, NORM]) {
+    for (let slayer in shape) {
+      let layer = ~~slayer;
       shape[layer].forEach((el, i) => {
-        if(layer == FACE)
-          el = addn(el, count[shapei][VERT]);
-        bufs[layer].set(el, (count[shapei][layer] + i) * 3)
+        if (layer == FACE)
+          el = v.addn(el, count[shapei][VERT]);
+        bufs[layer].set(el, (count[shapei][layer == FACE?FACE:VERT] + i) * (layer==ETC?4:3))
       });
     }
   })
