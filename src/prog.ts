@@ -6,7 +6,7 @@ import * as g0 from "./g0/gl"
 import * as v from "./g0/v3"
 import * as m from "./g0/m4"
 import shaders from "./shaders"
-import { calculateNormals, combine, FACE, flat, NORM, pie, Shape, shapesToBuffers, VERT, X, Y, Z } from "./g0/misc";
+import { calculateNormals, combine, ETC, FACE, flat, generateCurve, GEOCHANNELS, mesh, NORM, pie, pie2, pie3, revolutionShader, Shape, shapesToBuffers, VERT, X, Y, Z } from "./g0/misc";
 
 const width = 1600, height = 800;
 
@@ -17,8 +17,6 @@ C.height = height;
 
 g0.context(C);
 
-//console.log(111, m4.transform(m4.translation([0.5,0.5,0]), [1,0,0]));
-
 let startTime = Date.now();
 
 let pp: Shape[] = []
@@ -26,39 +24,42 @@ let pp: Shape[] = []
 function generate() {
 
   for (let i = 0; i < 10000; i++) {
-    let mat = m.multiply(      
-      m.translation([Math.random() * 200 - 100, Math.random() * 100, 0]), 
-      m.axisRotation([0, 0, 1], Math.random() * 6)
-    );
-    let p = pie(Math.random() + 0.3, 1 + Math.random() ** 7 * 5, ~~(Math.random() * 10) + 3);
-    calculateNormals(p);
-    //console.log(m);
-    //let m = m4.translation([Math.random() * 200 - 100, Math.random() * 100, 0]);
-    pp.push(m.transformShape(mat, p));
+    let curve = generateCurve();
+    let sectors = ~~(Math.random() * 10) + 3;
+    pp.push(mesh(sectors, curve.length-1, revolutionShader(curve,sectors)));
+    //pp.push(pie3(Math.random() + 0.3, 1 + Math.random() ** 7 * 5, ~~(Math.random() * 10) + 3));
   }
 }
 
-generate();
-
-let arrays = shapesToBuffers(pp);
-
-let vertBuf = g0.databuffer();
-let normBuf = g0.databuffer();
-let indexBuf = g0.databuffer();
-let etcBuf = g0.databuffer();
-
-function setDatabuffers() {
-  g0.setDatabuffer(vertBuf, arrays[0]);
-  g0.setDatabuffer(indexBuf, arrays[1], gc.ELEMENT_ARRAY_BUFFER);
-  g0.setDatabuffer(normBuf, arrays[2]);
-  g0.setDatabuffer(etcBuf, arrays[3]);
+function transform() {
+  pp = pp.map(p => {
+    let mat = m.multiply(
+      m.translation([Math.random() * 200 - 100, Math.random() * 100, 0]),
+      m.axisRotation([0, 0, 1], Math.random() * 6)
+    );
+    calculateNormals(p);
+    return m.transformShape(mat, p);
+  })
 }
 
-//console.log(arrays);
+function setDatabuffers() {
+  g0.setDatabuffer(bufs[FACE], arrays[FACE], gc.ELEMENT_ARRAY_BUFFER)
+  bufs.forEach((buf, channel) => {
+    if (channel != FACE)
+      g0.setDatabuffer(buf, arrays[channel]);;
+  })
+}
+
+
+generate();
+transform();
+
+let arrays = shapesToBuffers(pp);
+let bufs = GEOCHANNELS.map(i => g0.databuffer());
 
 setDatabuffers();
 
-console.log(`${Date.now()-startTime} ms ${arrays[1].length/3} faces`);
+console.log(`${Date.now() - startTime} ms ${arrays[1].length / 3} faces`);
 
 let textures = [g0.TEX_RGBA, g0.TEX_RGBA, g0.TEX_DEPTHS].map(
   (tex) => g0.texture(width, height, tex)
@@ -72,7 +73,7 @@ const fov = (50 * Math.PI) / 180;
 const aspect = width / height;
 const zNear = 2;
 const zFar = 200;
-const look = m.lookAt([0, -10, 20], [0, 30, 0], [0, 0, 1]);
+const look = m.lookAt([0, -20, 20], [0, 30, 0], [0, 0, 1]);
 
 const perspective = m.perspective(fov, aspect, zNear, zFar);
 const camera = m.multiply(perspective, m.inverse(look));
@@ -85,15 +86,14 @@ let pScreenUniform = g0.uniforms(pScreen);
 
 function loop() {
 
-  //gl.enable(gl.CULL_FACE);
-  //gl.cullFace(gc.BACK);
+  startTime = Date.now();
 
   gl.useProgram(pWorld);
 
   pWorldUniform.camera(camera)
-  g0.attr(pWorld, "vert", vertBuf, 3);
-  g0.attr(pWorld, "norm", normBuf, 3);
-  g0.attr(pWorld, "etc", etcBuf, 4);
+  g0.attr(pWorld, "vert", bufs[VERT], 3);
+  g0.attr(pWorld, "norm", bufs[NORM], 3);
+  g0.attr(pWorld, "etc", bufs[ETC], 4);
 
   gl.bindFramebuffer(gc.FRAMEBUFFER, framebuffer);
   gl.drawBuffers([
@@ -102,10 +102,8 @@ function loop() {
   ]);
   gl.clear(gc.DEPTH_BUFFER_BIT);
 
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuf);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bufs[FACE]);
   gl.drawElements(gc.TRIANGLES, arrays[FACE].length, gc.UNSIGNED_INT, 0);
-
-  //gl.disable(gl.CULL_FACE);
 
   gl.useProgram(pScreen);
   g0.bindTextures(textures, [pScreenUniform.T0, pScreenUniform.T1, pScreenUniform.Depth]);
@@ -113,9 +111,11 @@ function loop() {
   gl.drawArrays(gc.TRIANGLES, 0, 6)
 
   t++;
-}
 
-console.log("done")
+  gl.flush()
+
+  console.log(`Rendered in ${Date.now() - startTime} ms`);
+}
 
 window.onclick = loop;
 

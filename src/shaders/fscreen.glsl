@@ -29,16 +29,16 @@ void main() {
       //lut = lit>0.1?0.:1.;
       lut = 0.;
     } else {
-      //lut = lit * 65. > float(b64[F.y % 8 * 8 + F.x % 8]) ? 1. : 0.;
-      lut = lit;
+      lut = lit * 65. > float(b64[F.y % 8 * 8 + F.x % 8]) ? 1. : 0.;
+      //lut = lit;
     }
   }
 
   c.rgb = vec3(lut);
 
-  c.rgb = texelFetch(T0, F, 0).rgb;
+  //c.rgb = texelFetch(T0, F, 0).rgb;
 
-  if(texelFetch(T1, F, 0).r == 1.)
-    c.rgb = vec3(0., 0., 1.);
+  /*if(texelFetch(T1, F, 0).r == 1.)
+    c.rgb = vec3(0., 0., 1.);*/
   c.a = 1.;
 }

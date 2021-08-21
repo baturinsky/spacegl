@@ -5,9 +5,12 @@ import * as v from "./v3";
 
 export const X = 0, Y = 1, Z = 2;
 export const arr: (n: number) => number[] = n => [...new Array(n)].map((_, i) => i);
-export const VERT = 0, FACE = 1, NORM = 2, ETC = 3;
+export const FACE = 0, VERT = 1, NORM = 2, ETC = 3, GEOCHANNELS = [0, 1, 2, 3];
 
 export type Shape = [Vec[], Vec[], Vec[]?, Vec4[]?]
+export const PI2 = Math.PI * 2;
+
+const rng = Math.random
 
 export function calculateNormals(s: Shape) {
   s[NORM] = new Array(s[VERT].length);
@@ -19,28 +22,28 @@ export function calculateNormals(s: Shape) {
 
 export function pie(r: number, h: number, sectors: number) {
   let vert: Vec[] = [], face: Vec[] = [], etc: Vec4[] = [];
-  const foundation = 0, roof = 1, upper=sectors+1;
-  
+  const foundation = 0, roof = 1, upper = sectors + 1;
+
   vert[foundation] = [0, 0, 0];
   vert[roof] = [0, 0, h];
 
-  etc[foundation] = [0,-1,0,0];
-  etc[roof] = [0,2,0,0];
+  etc[foundation] = [0, -1, 0, 0];
+  etc[roof] = [0, 2, 0, 0];
 
   const angleStep = Math.PI * 2 / sectors;
 
-  for (let i = 2; i < sectors+3; i++) {
-    let a = v.angle2d(angleStep * (i-2))
+  for (let i = 2; i < sectors + 3; i++) {
+    let a = v.angle2d(angleStep * (i - 2))
     let x = r * a[X];
     let y = r * a[Y];
     vert[i] = [x, y, 0];
-    vert[i + upper] = [x, y, h];    
+    vert[i + upper] = [x, y, h];
 
-    etc[i] = [i,0,0,0];
-    etc[i + upper] = [i,1,0,0];
+    etc[i] = [i, 0, 0, 0];
+    etc[i + upper] = [i, 1, 0, 0];
   }
 
-  for (let i = 0; i < sectors+1; i++) {
+  for (let i = 0; i < sectors + 1; i++) {
     let left = i + 2
     let right = (i + 1) % upper + 2;
     face[i * 4] = [right, left, foundation]; //bottom
@@ -48,8 +51,8 @@ export function pie(r: number, h: number, sectors: number) {
     face[i * 4 + 2] = [right, right + upper, left];
     face[i * 4 + 3] = [right + upper, left + upper, left];
   }
-  
-  return [vert, face, null, etc] as Shape;
+
+  return [face, vert, null, etc] as Shape;
 }
 
 export function combine(shapes: Shape[]) {
@@ -103,7 +106,7 @@ export function flat(arr, makeArray: Function = n => new Array(n)) {
 }
 
 export function shapesToBuffers(shapes: Shape[]) {
- 
+
   let l = shapes.length;
   let count = new Array(l + 1);
   count[0] = [0, 0];
@@ -111,22 +114,81 @@ export function shapesToBuffers(shapes: Shape[]) {
     count[i + 1] = count[i].map((v, j) => v + shapes[i][j].length)
   }
   let bufs = [
-    new Float32Array(count[l][VERT] * 3), 
-    new Uint32Array(count[l][FACE] * 3), 
+    new Uint32Array(count[l][FACE] * 3),
+    new Float32Array(count[l][VERT] * 3),
     new Float32Array(count[l][VERT] * 3),
     new Float32Array(count[l][VERT] * 4),
   ]
-  
+
   shapes.forEach((shape, shapei) => {
     for (let slayer in shape) {
       let layer = ~~slayer;
       shape[layer].forEach((el, i) => {
         if (layer == FACE)
           el = v.addn(el, count[shapei][VERT]);
-        bufs[layer].set(el, (count[shapei][layer == FACE?FACE:VERT] + i) * (layer==ETC?4:3))
+        bufs[layer].set(el, (count[shapei][layer == FACE ? FACE : VERT] + i) * (layer == ETC ? 4 : 3))
       });
     }
   })
   //debugger;
   return bufs;
 }
+
+export function mesh(w: number, h: number, shader: (x: number, y: number) => Vec) {
+  let face: Vec[] = [], vert: Vec[] = [], etc: Vec4[] = [];
+
+  let cols = w + 1;
+
+  for (let x = 0; x <= w; x++) {
+    for (let y = 0; y <= h; y++) {
+      let vi = y * cols + x;
+      vert[vi] = shader(x, y);
+      etc[vi] = [x, y, 0, 0];
+      if (x < w && y < h) {
+        const fi = 2 * (y * w + x);
+        face[fi] = [vi + 1 + cols, vi + cols, vi];
+        face[fi+1] = [vi + 1, vi + 1 + cols, vi];
+      }
+    }
+  }
+
+  return [face, vert, null, etc] as Shape;
+}
+
+export const pieShader = (r: number, h: number, sectors: number) => (x: number, y: number): Vec => {
+  if (y == 0)
+    return [0, 0, 0];
+  if (y == 3)
+    return [0, 0, h];
+  let a = v.angle2d(PI2 / sectors * x);
+  return [a[X] * r, a[Y] * r, (y - 1) * h] as Vec;
+}
+
+export const pie2 = (r, h, sectors) => mesh(sectors, 3, pieShader(r, h, sectors));
+
+
+export const revolutionShader = (curve: number[][], sectors: number) => (x: number, y: number): Vec => {
+  let a = v.angle2d(PI2 / sectors * x);
+  return [a[X] * curve[y][X], a[Y] * curve[y][X], curve[y][Y]] as Vec;
+}
+
+export const pie3 = (r, h, sectors) => mesh(sectors, 3, revolutionShader([[0, 0], [r, 0], [r, h], [0, h]], sectors));
+
+export const generateCurve = () => {
+  let [x, y] = [rng() * 2, 0];
+  let c = [[0, 0]];
+  let w = 0;
+  while (rng() > 0.2 || c.length == 0) {
+    c.push([x, y]);
+    if (w != 0)
+      x *= 0.9 - rng() * 0.3;
+    if (w != 1)
+      y += rng() ** 2 * 2 * x;
+    w = ~~(rng() * 3);
+  }
+  c.push([0, y]);
+  return c;
+}
+
+for (let i of arr(10))
+  console.log(generateCurve());
