@@ -11,10 +11,6 @@ const UP = v3.axis[Y];
 };*/
 
 
-export const transformShape = (m: Mat, shape: Shape) => shape.map((arr, channel) =>
-  channel == VERT ? arr.map(v => transform(m, v)) : channel == NORM ? arr.map(v => transformDirection(m, v)) : arr
-) as Shape;
-
 export const multiply = (a: Mat, b: Mat) => a.map((_, n) => arr(4).reduce((s, i) => s + b[n - n % 4 + i] * a[n % 4 + i * 4], 0));
 export const add = (a: Mat, b: Mat) => a.map((x, i) => x + b[i]) as Mat;
 export const sub = (a: Mat, b: Mat) => a.map((x, i) => x - b[i]) as Mat;

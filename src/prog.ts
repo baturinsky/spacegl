@@ -6,7 +6,7 @@ import * as g0 from "./g0/gl"
 import * as v from "./g0/v3"
 import * as m from "./g0/m4"
 import shaders from "./shaders"
-import { calculateNormals, combine, ETC, FACE, flat, generateCurve, GEOCHANNELS, mesh, NORM, pie, pie2, pie3, revolutionShader, Shape, shapesToBuffers, VERT, X, Y, Z } from "./g0/misc";
+import { calculateNormals, combine, ETC, FACE, flat, generateCurve, GEOCHANNELS, mesh, NORM, pie, pie2, pie3, revolutionShader, RNG, Shape, shapesToBuffers, transformShape, VERT, X, Y, Z } from "./g0/misc";
 
 const width = 1600, height = 800;
 
@@ -21,26 +21,32 @@ let startTime = Date.now();
 
 let pp: Shape[] = []
 
+let rng = RNG(1);
+
 function generate() {
 
   for (let i = 0; i < 10000; i++) {
-    let curve = generateCurve();
-    let sectors = ~~(Math.random() * 10) + 3;
+    let curve = generateCurve(rng);
+    let sectors = ~~(rng(10)) + 3;
     pp.push(mesh(sectors, curve.length-1, revolutionShader(curve,sectors)));
     //pp.push(pie3(Math.random() + 0.3, 1 + Math.random() ** 7 * 5, ~~(Math.random() * 10) + 3));
   }
 }
 
-function transform() {
+function transformShapes() {
   pp = pp.map(p => {
     let mat = m.multiply(
-      m.translation([Math.random() * 200 - 100, Math.random() * 100, 0]),
-      m.axisRotation([0, 0, 1], Math.random() * 6)
-    );
-    calculateNormals(p);
-    return m.transformShape(mat, p);
+      m.translation([rng(200)-100, rng(100), 0]),
+      m.axisRotation([0, 0, 1], rng() * 6)
+    );    
+    return transformShape(mat, p);
   })
 }
+
+function calculateAllNormals() {
+  pp.forEach(p=>calculateNormals(p));
+}
+
 
 function setDatabuffers() {
   g0.setDatabuffer(bufs[FACE], arrays[FACE], gc.ELEMENT_ARRAY_BUFFER)
@@ -52,7 +58,8 @@ function setDatabuffers() {
 
 
 generate();
-transform();
+transformShapes();
+calculateAllNormals();
 
 let arrays = shapesToBuffers(pp);
 let bufs = GEOCHANNELS.map(i => g0.databuffer());

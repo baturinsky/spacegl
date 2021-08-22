@@ -2,6 +2,7 @@
 
 import { Vec, Vec4 } from "./v3";
 import * as v from "./v3";
+import * as m from "./m4";
 
 export const X = 0, Y = 1, Z = 2;
 export const arr: (n: number) => number[] = n => [...new Array(n)].map((_, i) => i);
@@ -10,8 +11,6 @@ export const FACE = 0, VERT = 1, NORM = 2, ETC = 3, GEOCHANNELS = [0, 1, 2, 3];
 export type Shape = [Vec[], Vec[], Vec[]?, Vec4[]?]
 export const PI2 = Math.PI * 2;
 
-const rng = Math.random
-
 export function calculateNormals(s: Shape) {
   s[NORM] = new Array(s[VERT].length);
   for (let i = 0; i < s[FACE].length; i++) {
@@ -19,6 +18,10 @@ export function calculateNormals(s: Shape) {
     s[NORM][s[FACE][i][2]] = v.norm(v.cross(v.sub(verts[1], verts[0]), v.sub(verts[2], verts[0])));
   }
 }
+
+export const transformShape = (mat: m.Mat, shape: Shape) => shape.map((arr, channel) =>
+  channel == VERT ? arr.map(v => m.transform(mat, v)) : arr
+) as Shape;
 
 export function pie(r: number, h: number, sectors: number) {
   let vert: Vec[] = [], face: Vec[] = [], etc: Vec4[] = [];
@@ -130,7 +133,7 @@ export function shapesToBuffers(shapes: Shape[]) {
       });
     }
   })
-  //debugger;
+  
   return bufs;
 }
 
@@ -147,7 +150,7 @@ export function mesh(w: number, h: number, shader: (x: number, y: number) => Vec
       if (x < w && y < h) {
         const fi = 2 * (y * w + x);
         face[fi] = [vi + 1 + cols, vi + cols, vi];
-        face[fi+1] = [vi + 1, vi + 1 + cols, vi];
+        face[fi + 1] = [vi + 1, vi + 1 + cols, vi];
       }
     }
   }
@@ -174,21 +177,33 @@ export const revolutionShader = (curve: number[][], sectors: number) => (x: numb
 
 export const pie3 = (r, h, sectors) => mesh(sectors, 3, revolutionShader([[0, 0], [r, 0], [r, h], [0, h]], sectors));
 
-export const generateCurve = () => {
+export const generateCurve = (rng: (number?) => number) => {
   let [x, y] = [rng() * 2, 0];
   let c = [[0, 0]];
-  let w = 0;
-  while (rng() > 0.2 || c.length == 0) {
+  let w = 1;
+  while (rng(5) || c.length == 0) {
     c.push([x, y]);
+    if (w == 1)
+      x *= 0.9 - rng() * 0.4;
     if (w != 0)
-      x *= 0.9 - rng() * 0.3;
-    if (w != 1)
       y += rng() ** 2 * 2 * x;
-    w = ~~(rng() * 3);
+    w = rng(4);
   }
   c.push([0, y]);
   return c;
 }
 
-for (let i of arr(10))
-  console.log(generateCurve());
+export function RNG(seed:number) {
+
+  if (0 < seed && seed < 1)
+    seed = ~~(seed * 1e9);
+
+  let rngi = (n:number) => {
+    return ~~(Math.sin(++seed) ** 2 * 1e9 % n)*Math.sign(n);
+  }
+
+  let rng = (n?:number) => {
+    return n == -1 ? seed : n == null ? rngi(1e9) / 1e9 : rngi(n)
+  }
+  return rng;
+}
