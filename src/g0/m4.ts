@@ -1,30 +1,34 @@
+//@ts-check
+
 export type Mat = number[];
 import * as v3 from "./v3"
-import { Vec, Vec4 } from "./v3"
-import { arr, X, Y, Z, Shape, VERT, NORM, FACE, ETC } from "./misc"
+import { Vec } from "./v3"
+import { arr, X, Y, Z } from "./misc"
 
 const UP = v3.axis[Y];
 
-/*export const transform = (m: Mat, v: v3.Vec | v3.Vec4) => {
-  v = v3.v4(v);
-  return v3.v3(arr(4).map((col) => v.reduce((sum, x, row) => sum + x * m[row + col * 4], 0)) as Vec4);
-};*/
-
-
-export const multiply = (a: Mat, b: Mat) => a.map((_, n) => arr(4).reduce((s, i) => s + b[n - n % 4 + i] * a[n % 4 + i * 4], 0));
+export const multiply = (a: Mat, b: Mat) => a.map((_, n) => {
+  let col = n % 4, row4 = n - col;
+  return (
+    b[row4] * a[col] +
+    b[row4 + 1] * a[col + 4] +
+    b[row4 + 2] * a[col + 8] +
+    b[row4 + 3] * a[col + 12]
+  )
+});
 export const add = (a: Mat, b: Mat) => a.map((x, i) => x + b[i]) as Mat;
 export const sub = (a: Mat, b: Mat) => a.map((x, i) => x - b[i]) as Mat;
 export const scale = (m: Mat, n: number) => m.map(x => n * x);
-export const trace = a => a[0] + a[5] + a[10] + a[15];
+export const trace = (a: Mat) => a[0] + a[5] + a[10] + a[15];
 
-export const sum = (a: number, b?: Mat, ...args) => {
+export const sum = (a: number, b?: Mat, ...args: any[]): Mat => {
   const v = scale(b, a)
-  return args.length ? add(v, sum(...(args as [number, Mat, any]))) : v;
+  return (args.length ? add(v, sum(...(args as [number, Mat, any]))) : v) as Mat;
 }
 
 export const transpose = (m: Mat) => m.map((_, i) => m[i % 4 * 4 + ~~(i / 4)]);
 
-export function det(A: Mat) {
+export function matInfo(A: Mat): [number, Mat, Mat, number, number, number,] {
   const AA = multiply(A, A);
   const AAA = multiply(A, AA);
   const AAAA = multiply(AA, AA);
@@ -33,28 +37,28 @@ export function det(A: Mat) {
   const trAAA = trace(AAA);
   const trAAAA = trace(AAAA);
   const det = (trA ** 4 - 6 * trAA * trA * trA + 3 * trAA * trAA + 8 * trAAA * trA - 6 * trAAAA) / 24;
-  return det;
+  return [det, AA, AAA, trA, trAA, trAAA];
+}
+
+
+export function det(A: Mat) {
+  return matInfo(A)[0];
 }
 
 export function inverse(A: Mat) {
-  const AA = multiply(A, A);
-  const AAA = multiply(A, AA);
-  const AAAA = multiply(AA, AA);
-  const trA = trace(A);
-  const trAA = trace(AA);
-  const trAAA = trace(AAA);
-  const trAAAA = trace(AAAA);
-  const det = (trA ** 4 - 6 * trAA * trA * trA + 3 * trAA * trAA + 8 * trAAA * trA - 6 * trAAAA) / 24;
-  let total = sum((trA * trA * trA - 3 * trA * trAA + 2 * trAAA) / 6, identity,
+  let [det, AA, AAA, trA, trAA, trAAA] = matInfo(A);
+  let total = sum(
+    (trA * trA * trA - 3 * trA * trAA + 2 * trAAA) / 6, identity,
     - (trA * trA - trAA) / 2, A,
     trA, AA,
-    -1, AAA);
+    -1, AAA
+  );
   return scale(total, 1 / det);
 };
 
 export const identity = arr(16).map(n => n % 5 ? 0 : 1);
 
-export const set = (m, s) => {
+export const set = (m: Mat, s: { [k: number]: number }) => {
   m = [...m];
   for (let k in s)
     m[k] = s[k];
@@ -114,7 +118,7 @@ export function axisRotation(axis: Vec, angleInRadians: number) {
   ]
 }
 
-export function transformDirection(m, v) {
+export function transformDirection(m: Mat, v: Vec) {
 
   const [v0, v1, v2] = v;
 
@@ -136,10 +140,11 @@ export function transform(m: Mat, v: Vec) {
   ] as Vec;
 }
 
-
 export const translation = (v: Vec) => [
   1, 0, 0, 0,
   0, 1, 0, 0,
   0, 0, 1, 0,
   v[X], v[Y], v[Z], 1
 ]
+
+export const shortMultiply = (a: Mat, b: Mat) => a.map((_, n) => arr(4).reduce((s, i) => s + b[n - n % 4 + i] * a[n % 4 + i * 4], 0));
