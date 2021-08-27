@@ -1,8 +1,8 @@
 //@ts-check
 
 export type Mat = number[];
-import * as v3 from "./v3"
-import { Vec } from "./v3"
+import * as v3 from "./vec3"
+import { Vec3 } from "./vec3"
 import { arr, X, Y, Z } from "./misc"
 
 const UP = v3.axis[Y];
@@ -65,14 +65,14 @@ export const set = (m: Mat, s: { [k: number]: number }) => {
   return m;
 }
 
-export const cross = (v: Vec) => [
+export const cross = (v: Vec3) => [
   0, -v[Z], v[Y], 0,
   v[Z], 0, -v[X], 0,
   -v[Y], v[X], 0, 0,
   0, 0, 0, 1
 ]
 
-export const lookTo = (eye: Vec, dir: Vec, up: Vec = UP) => {
+export const lookTo = (eye: Vec3, dir: Vec3, up: Vec3 = UP) => {
   const z = v3.norm(v3.scale(dir, -1));
   const x = v3.norm(v3.cross(up, z));
   const y = v3.cross(x, z);
@@ -84,7 +84,7 @@ export const lookTo = (eye: Vec, dir: Vec, up: Vec = UP) => {
   ]
 }
 
-export const lookAt = (eye: Vec, target: Vec, up: Vec = UP) => {
+export const lookAt = (eye: Vec3, target: Vec3, up: Vec3 = UP) => {
   return lookTo(eye, v3.sub(target, eye), up);
 }
 
@@ -99,7 +99,7 @@ export const perspective = (fieldOfViewYInRadians: number, aspect: number, zNear
   ]
 }
 
-export function axisRotation(axis: Vec, angleInRadians: number) {
+export function axisRotation(axis: Vec3, angleInRadians: number) {
 
   let [x, y, z] = axis;
   const n = Math.sqrt(x * x + y * y + z * z);
@@ -118,7 +118,7 @@ export function axisRotation(axis: Vec, angleInRadians: number) {
   ]
 }
 
-export function transformDirection(m: Mat, v: Vec) {
+export function transformDirection(m: Mat, v: Vec3) {
 
   const [v0, v1, v2] = v;
 
@@ -129,18 +129,18 @@ export function transformDirection(m: Mat, v: Vec) {
   ];
 }
 
-export function transform(m: Mat, v: Vec) {
+export function transform(m: Mat, v: Vec3) {
   const [v0, v1, v2] = v;
-  const d = v0 * m[0 * 4 + 3] + v1 * m[1 * 4 + 3] + v2 * m[2 * 4 + 3] + m[3 * 4 + 3];
+  const d = v0 * m[3] + v1 * m[7] + v2 * m[11] + m[15];
 
   return [
-    (v0 * m[0 * 4 + 0] + v1 * m[1 * 4 + 0] + v2 * m[2 * 4 + 0] + m[3 * 4 + 0]) / d,
-    (v0 * m[0 * 4 + 1] + v1 * m[1 * 4 + 1] + v2 * m[2 * 4 + 1] + m[3 * 4 + 1]) / d,
-    (v0 * m[0 * 4 + 2] + v1 * m[1 * 4 + 2] + v2 * m[2 * 4 + 2] + m[3 * 4 + 2]) / d
-  ] as Vec;
+    (v0 * m[0] + v1 * m[4] + v2 * m[8] + m[12]) / d,
+    (v0 * m[1] + v1 * m[5] + v2 * m[9] + m[13]) / d,
+    (v0 * m[2] + v1 * m[6] + v2 * m[10] + m[14]) / d
+  ] as Vec3;
 }
 
-export const translation = (v: Vec) => [
+export const translation = (v: Vec3) => [
   1, 0, 0, 0,
   0, 1, 0, 0,
   0, 0, 1, 0,

@@ -3,11 +3,13 @@
 import * as gc from "./g0/glconst";
 import { gl } from "./g0/gl";
 import * as g0 from "./g0/gl"
-import * as v from "./g0/v3"
-import * as m from "./g0/m4"
+import * as v3 from "./g0/vec3"
+import * as vec from "./g0/vec"
+import * as m4 from "./g0/mat4"
 import * as shape from "./g0/shape"
 import shaders from "./shaders"
-import { arr, RNG } from "./g0/misc";
+import { arr, RNG, X, Y } from "./g0/misc";
+import { Vec2 } from "./g0/vec";
 
 const width = 1600, height = 800;
 
@@ -34,38 +36,45 @@ let t = 0;
 
 const fov = (50 * Math.PI) / 180;
 const aspect = width / height;
-const zNear = 2;
-const zFar = 200;
-const look = m.lookAt([0, -20, 30], [0, 30, 0], [0, 0, 1]);
+const zNear = 10;
+const zFar = 3000;
+const look = m4.lookAt([0, -300, 300], [0, 500, 0], [0, 0, 1]);
 
-const mPerspective = m.perspective(fov, aspect, zNear, zFar);
-const mCamera = m.multiply(mPerspective, m.inverse(look));
+const mPerspective = m4.perspective(fov, aspect, zNear, zFar);
+const mCamera = m4.multiply(mPerspective, m4.inverse(look));
 
 let world = generateCity();
+//let world = [];
 
-let divs = 20, r = 5;
+let divs = 20, r = 200;
 let ball = shape.mesh(divs, divs, shape.revolutionShader(arr(divs + 1).map(row => {
   let a = row / divs * Math.PI;
-  let [x,y] = [Math.sin(a)*r, Math.sin(a - Math.PI/2)*r+15];
-  console.log(row, a, x, y);
-  //let x = Math.cos(a) * r;
-  //let y = Math.sin(a) * r + 10;
-  return [x,y];
+  let [x, y] = [Math.sin(a) * r, Math.sin(a - Math.PI / 2) * r + 15];
+  return [x, y];
 }), divs))
 
-//console.log(ball);
+let wing = shape.towerMesh(
+  shape.smoothPoly([[0, -4], [14, -5], [0, 3], [-14, -5]], 0.1),
+  [[0, 0], [0.8, 0], [1, 0.5], [1, 1], [0.8, 1.5], [0, 1.5]]
+);
+shape.transformShape(m4.translation([0, 13, 5]), wing);
 
-//let ball = shape.mesh(10, 10, (x,y)=>[x+y, x-y, y])
 
-//let world = [ball];
+let body = shape.towerMesh(
+  shape.smoothPoly([[3, -5], [0, 5], [-3, -5]], 0.2),
+  [[0, 0], [0.8, 0], [1, 2], [1, 4], [0.4, 5], [0, 5]]
+)
+shape.transformShape(m4.translation([0, 12, 4]), body);
 
-world.push(ball);
+let flyer = shape.combine([body, wing])
+
+world.push(flyer);
 
 calculateAllNormals(world);
 
-let { bufs, elements } = putShapesInElementBuffers(world, shape.defaultAttrs);
+let { bufs, elements } = putShapesInElementBuffers(world, { at: 3, norm: 3, cell: 3, type: 1 });
 
-console.log(bufs, elements);
+//console.log(bufs, elements);
 
 console.log(`${Date.now() - startTime} ms ${elements.faces.length} faces`);
 
@@ -78,7 +87,7 @@ function loop() {
   gl.useProgram(pMain);
 
   pMainUniform.camera(mCamera);
-  pMainUniform.sun(...v.norm([-1, 1, -1]));
+  pMainUniform.sun(...v3.norm([-1, 1, -1]));
 
   gl.bindFramebuffer(gc.FRAMEBUFFER, framebuffer);
   gl.drawBuffers([
@@ -111,20 +120,46 @@ function generateCity() {
 
   let rng = RNG(1);
 
+  const generateBuildingCurve = (rng: (v?: number) => number) => {
+    let [x, y] = [rng() * 20 + 5, 0];
+    let curve = [[0, 0]] as Vec2[];
+    let types = [] as number[];
+    // 0 = horisontal, 1 - diagonal, 2 - vertical
+    let w = 2;
+    while (rng(4) || curve.length == 0) {
+      curve.push([x, y]);
+      let mx = w <= 1 ? 0.8 - rng() * 0.4 : 1
+      let dy = w >= 1 ? (rng() + 0.3) ** 2 * 2 * x : 0;
+      x *= mx;
+      y += dy;
+      types.push(mx > 0.2 ? 2 : 0)
+      w = rng(5);
+    }
+    curve.push([0, y]);
+    return [curve, types] as [Vec2[], number[]];
+  }
+
   function generate() {
     for (let i = 0; i < 10000; i++) {
-      let curve = shape.generateCurve(rng);
+      let [curve, types] = generateBuildingCurve(rng);
       let sectors = (~~(rng(5)) + 3) * 2;
-      shapes.push(shape.mesh(sectors, curve.length - 1, shape.biRevolutionShader(curve, sectors, 0.7)));
+      let building = shape.mesh(sectors, curve.length - 1, shape.biRevolutionShader(curve, sectors, rng()));
+      for (let v of building.verts) {
+        v.type = types[v.cell[Y]];
+        //debugger;
+        //v.type = (v.cell[Y]%3==0)?2:0;
+        //v.type = Math.random()>0.9?2:0;
+      }
+      shapes.push(building);
     }
   }
 
   function transformShapes() {
     for (let i = 0; i < 10000; i++) {
       let s = shapes[i]
-      let mat = m.multiply(
-        m.translation([i % 100 - 50, i / 30, 0]),
-        m.axisRotation([0, 0, 1], rng() * 6)
+      let mat = m4.multiply(
+        m4.translation([10 * (i % 100 * 2 - 100), i / 4, 0]),
+        m4.axisRotation([0, 0, 1], rng() * 6)
       );
       shape.transformShape(mat, s);
     }
@@ -140,7 +175,6 @@ function generateCity() {
   return shapes;
 }
 
-
 function calculateAllNormals(shapes: shape.Shape[]) {
   for (let p of shapes)
     shape.calculateFlatNormals(p);
@@ -152,3 +186,7 @@ function putShapesInElementBuffers(shapes: shape.Shape[], attrs: { [k: string]: 
   g0.setDatabuffers(bufs, elements);
   return { bufs, elements };
 }
+
+
+
+

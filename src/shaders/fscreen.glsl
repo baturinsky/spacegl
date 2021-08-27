@@ -33,6 +33,11 @@ void main() {
       //lut = lit * 15. > float(b16[F.y % 4 * 4 + F.x % 4]) ? 1. : 0.;
       //lut = lit;
     }
+
+    if(depth > 0.99){
+      lut = (depth-0.99)*7000. > float(b64[F.y % 8 * 8 + F.x % 8]) ? 1. : lut;
+    }
+
   }
 
   c.rgb = vec3(lut);

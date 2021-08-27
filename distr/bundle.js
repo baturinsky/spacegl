@@ -53,27 +53,30 @@
     return res;
   }
 
-  // src/g0/v3.ts
+  // src/g0/vec3.ts
   var axis = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
-  var len = (v4) => (v4[0] * v4[0] + v4[1] * v4[1] + v4[2] * v4[2]) ** 0.5;
-  var scale = (v4, n) => [v4[0] * n, v4[1] * n, v4[2] * n];
-  var norm = (v4, l = 1) => scale(v4, l / len(v4));
-  var sub = (v4, w) => [v4[0] - w[0], v4[1] - w[1], v4[2] - w[2]];
+  var len = (v) => (v[X] * v[X] + v[Y] * v[Y] + v[Z] * v[Z]) ** 0.5;
+  var scale = (v, n) => [v[X] * n, v[Y] * n, v[Z] * n];
+  var norm = (v, l = 1) => scale(v, l / len(v));
+  var sub = (v, w) => [v[X] - w[X], v[Y] - w[Y], v[Z] - w[Z]];
   var cross = (a, b) => [a[Y] * b[Z] - a[Z] * b[Y], a[Z] * b[X] - a[X] * b[Z], a[X] * b[Y] - a[Y] * b[X]];
-  var angle2d = (a) => [Math.cos(a), Math.sin(a)];
 
-  // src/g0/m4.ts
+  // src/g0/vec.ts
+  var angle2d = (a) => [Math.cos(a), Math.sin(a)];
+  var lerp = (v, w, n) => v.map((x, i) => x * (1 - n) + w[i] * n);
+
+  // src/g0/mat4.ts
   var UP = axis[Y];
   var multiply = (a, b) => a.map((_, n) => {
     let col = n % 4, row4 = n - col;
     return b[row4] * a[col] + b[row4 + 1] * a[col + 4] + b[row4 + 2] * a[col + 8] + b[row4 + 3] * a[col + 12];
   });
   var add = (a, b) => a.map((x, i) => x + b[i]);
-  var scale2 = (m3, n) => m3.map((x) => n * x);
+  var scale2 = (m, n) => m.map((x) => n * x);
   var trace = (a) => a[0] + a[5] + a[10] + a[15];
   var sum = (a, b, ...args) => {
-    const v4 = scale2(b, a);
-    return args.length ? add(v4, sum(...args)) : v4;
+    const v = scale2(b, a);
+    return args.length ? add(v, sum(...args)) : v;
   };
   function matInfo(A) {
     const AA = multiply(A, A);
@@ -168,16 +171,16 @@
       1
     ];
   }
-  function transform(m3, v4) {
-    const [v0, v1, v22] = v4;
-    const d = v0 * m3[0 * 4 + 3] + v1 * m3[1 * 4 + 3] + v22 * m3[2 * 4 + 3] + m3[3 * 4 + 3];
+  function transform(m, v) {
+    const [v0, v1, v2] = v;
+    const d = v0 * m[3] + v1 * m[7] + v2 * m[11] + m[15];
     return [
-      (v0 * m3[0 * 4 + 0] + v1 * m3[1 * 4 + 0] + v22 * m3[2 * 4 + 0] + m3[3 * 4 + 0]) / d,
-      (v0 * m3[0 * 4 + 1] + v1 * m3[1 * 4 + 1] + v22 * m3[2 * 4 + 1] + m3[3 * 4 + 1]) / d,
-      (v0 * m3[0 * 4 + 2] + v1 * m3[1 * 4 + 2] + v22 * m3[2 * 4 + 2] + m3[3 * 4 + 2]) / d
+      (v0 * m[0] + v1 * m[4] + v2 * m[8] + m[12]) / d,
+      (v0 * m[1] + v1 * m[5] + v2 * m[9] + m[13]) / d,
+      (v0 * m[2] + v1 * m[6] + v2 * m[10] + m[14]) / d
     ];
   }
-  var translation = (v4) => [
+  var translation = (v) => [
     1,
     0,
     0,
@@ -190,14 +193,14 @@
     0,
     1,
     0,
-    v4[X],
-    v4[Y],
-    v4[Z],
+    v[X],
+    v[Y],
+    v[Z],
     1
   ];
 
   // src/g0/shape.ts
-  var defaultAttrs = {at: 3, norm: 3, uv: 3};
+  var defaultAttrs = {at: 3, norm: 3, cell: 3};
   function calculateFlatNormals(s) {
     for (let f of s.faces) {
       if (f[2].norm == null || Number.isNaN(f[2].norm[X]))
@@ -208,16 +211,34 @@
     for (let vert of shape3.verts)
       vert.at = transform(mat, vert.at);
   };
+  function reindexVerts(shape3) {
+    shape3.verts.forEach((v, i) => v.ind = i);
+    return shape3;
+  }
+  function combine(shapes) {
+    return reindexVerts({faces: flat(shapes.map((s) => s.faces)), verts: flat(shapes.map((s) => s.verts))});
+  }
   function addUp(arr2) {
     let total = 0;
     return [0, ...arr2.map((el) => total += el.length)];
+  }
+  function flat(arr2, makeArray = (n) => new Array(n)) {
+    const numEl = addUp(arr2);
+    let flattened = makeArray(numEl[arr2.length]);
+    let skip;
+    for (let i = arr2.length - 1; i >= 0; i--) {
+      skip = i == 0 ? 0 : numEl[i];
+      for (let j = arr2[i].length - 1; j >= 0; j--)
+        flattened[skip + j] = arr2[i][j];
+    }
+    return flattened;
   }
   function shapesToElements(shapes, attrs) {
     let l = shapes.length;
     let faceCount = addUp(shapes.map((s) => s.faces));
     let vertCount = addUp(shapes.map((s) => s.verts));
     let faces = new Uint32Array(faceCount[l] * 3);
-    let verts = dictMap(attrs, (v4) => new Float32Array(vertCount[l] * v4));
+    let verts = dictMap(attrs, (v) => new Float32Array(vertCount[l] * v));
     let f = 0;
     shapes.forEach((shape3, shapei) => {
       for (let face of shape3.faces) {
@@ -231,20 +252,24 @@
       let size = attrs[bufName];
       let buf = verts[bufName];
       let i = 0;
-      if (size == 1)
-        shapes.forEach((shape3, shapei) => {
-          for (let vert of shape3.verts)
+      if (size == 1) {
+        for (let shape3 of shapes) {
+          for (let vert of shape3.verts) {
             if (vert[bufName])
-              buf[i++] = vert[bufName];
-        });
-      else
-        shapes.forEach((shape3, shapei) => {
+              buf[i] = vert[bufName];
+            i++;
+          }
+        }
+      } else {
+        for (let shape3 of shapes) {
           for (let vert of shape3.verts) {
             if (vert[bufName])
               buf.set(vert[bufName], i * size);
             i++;
           }
-        });
+        }
+        ;
+      }
     }
     return {faces, verts};
   }
@@ -253,7 +278,7 @@
     let verticeCols = cols + 1;
     for (let x = 0; x <= cols; x++)
       for (let y = 0; y <= rows; y++)
-        verts[y * verticeCols + x] = {at: shader2(x, y), uv: [x, y, 0], ind: y * verticeCols + x};
+        verts[y * verticeCols + x] = {at: shader2(x, y), cell: [x, y, 0], ind: y * verticeCols + x};
     for (let x = 0; x < cols; x++)
       for (let y = 0; y < rows; y++) {
         const fi = 2 * (y * cols + x);
@@ -268,21 +293,11 @@
   var towerShader = (slice, curve) => (x, y) => {
     return [slice[x % slice.length][X] * curve[y][X], slice[x % slice.length][Y] * curve[y][X], curve[y][Y]];
   };
-  var generateCurve = (rng) => {
-    let [x, y] = [rng() * 2 + 0.5, 0];
-    let c = [[0, 0]];
-    let w = 2;
-    while (rng(5) || c.length == 0) {
-      c.push([x, y]);
-      if (w <= 1)
-        x *= 0.9 - rng() * 0.4;
-      if (w >= 1)
-        y += (rng() + 0.1) ** 2 * 2 * x;
-      w = rng(5);
-    }
-    c.push([0, y]);
-    return c;
-  };
+  var towerMesh = (slice, curve) => mesh(slice.length, curve.length - 1, towerShader(slice, curve));
+  var smoothPoly = (curve, gap) => flat(curve.map((v, i) => {
+    let w = curve[(i + 1) % curve.length];
+    return [lerp(v, w, gap), lerp(v, w, 1 - gap)];
+  }));
 
   // src/g0/gl.ts
   var gl;
@@ -291,12 +306,12 @@
     gl = c.getContext("webgl2");
     gl.enable(DEPTH_TEST);
   }
-  function shader(mode, body) {
+  function shader(mode, body2) {
     let src = `#version 300 es
 precision highp float;
 precision highp int;
 
-${body}`;
+${body2}`;
     const shader2 = gl.createShader(mode);
     gl.shaderSource(shader2, src);
     gl.compileShader(shader2);
@@ -392,16 +407,16 @@ ${body}`;
   }
 
   // src/shaders/fMain.glsl
-  var fMain_default = "uniform float t;\nuniform vec3 sun;\n\nflat in vec3 normal;\nin vec3 fuv;\n\nlayout(location = 0) out vec4 c0;\nlayout(location = 1) out vec4 c1;\n\nvoid main() {\n  float light = dot(normal, sun)*0.5+.5;\n  light += fract(fuv.y)>0.1 && fract(fuv.y)<0.9 && fract(fuv.x)>0.1 && fract(fuv.x)<0.9 && fract(fuv.y*10.)>0.3 && fract(fuv.x*10.)>0.3?-1.:.0;\n  /*if(mod(uv.x,0.2)<0.1 != mod(uv.y,0.2)<0.1)\n    light /= 2.;*/\n  c0 = vec4(vec3(light), 1.);\n  c1 = vec4(gl_FrontFacing?0.:1.,0.,0.,0.);\n}\n";
+  var fMain_default = "uniform float t;\nuniform vec3 sun;\n\nflat in vec3 normal;\nflat in float cellType;\nin vec3 uv;\n\nlayout(location = 0) out vec4 c0;\nlayout(location = 1) out vec4 c1;\n\nvoid main() {\n  float light = dot(normal, sun)*0.5+.5;\n  if(cellType == 2.)\n    light += fract(uv.y)>0.1 && fract(uv.y)<0.9 && fract(uv.x)>0.1 && fract(uv.x)<0.9 && fract(uv.y*10.)>0.3 && fract(uv.x*10.)>0.3?-1.:.0;\n  light += uv.y*0.05 - 0.3;\n  /*if(mod(uv.x,0.2)<0.1 != mod(uv.y,0.2)<0.1)\n    light /= 2.;*/\n  c0 = vec4(vec3(light), 1.);\n  c1 = vec4(gl_FrontFacing?0.:1.,0.,0.,0.);\n}\n";
 
   // src/shaders/fScreen.glsl
-  var fScreen_default = "uniform sampler2D T0;\nuniform sampler2D T1;\nuniform sampler2D Depth;\n\nout vec4 c;\n\nint b16[16] = int[] (1, 9, 3, 11, 13, 5, 15, 7, 4, 12, 2, 10, 16, 8, 14, 6);\nint b64[64] = int[] (1, 33, 9, 41, 3, 35, 11, 43, 49, 17, 57, 25, 51, 19, 59, 27, 13, 45, 5, 37, 15, 47, 7, 39, 61, 29, 53, 21, 63, 31, 55, 23, 4, 36, 12, 44, 2, 34, 10, 42, 52, 20, 60, 28, 50, 18, 58, 26, 16, 48, 8, 40, 14, 46, 6, 38, 64, 32, 56, 24, 62, 30, 54, 22);\n\nvoid main() {\n  ivec2 F = ivec2(gl_FragCoord.xy);\n  c = vec4(0.);\n  float depth = texelFetch(Depth, F, 0).r;\n  float lut;\n\n  if(depth == 1.) {\n    lut = 1.;\n  } else {\n    float lit = texelFetch(T0, F, 0).r;\n\n    float diff = 0.;\n    for(int i = 0; i < 8; i++) {\n      int step = i/4;\n      float edge = texelFetch(Depth, F + ivec2(i % 2, i % 4 / 2)*step, 0).r + texelFetch(Depth, F - ivec2(i % 2, i % 4 / 2)*step, 0).r - depth * 2.;\n      diff += abs(edge);\n    }\n\n    if(diff > .00007) {\n      //lut = lit>0.1?0.:1.;\n      lut = 0.;\n    } else {\n      lut = lit * 65. > float(b64[F.y % 8 * 8 + F.x % 8]) ? 1. : 0.;\n      //lut = lit * 15. > float(b16[F.y % 4 * 4 + F.x % 4]) ? 1. : 0.;\n      //lut = lit;\n    }\n  }\n\n  c.rgb = vec3(lut);\n\n  //c.rgb = texelFetch(T0, F, 0).rgb;\n\n  /*if(texelFetch(T1, F, 0).r == 1.)\n    c.rgb = vec3(0., 0., 1.);*/\n  c.a = 1.;\n}";
+  var fScreen_default = "uniform sampler2D T0;\nuniform sampler2D T1;\nuniform sampler2D Depth;\n\nout vec4 c;\n\nint b16[16] = int[] (1, 9, 3, 11, 13, 5, 15, 7, 4, 12, 2, 10, 16, 8, 14, 6);\nint b64[64] = int[] (1, 33, 9, 41, 3, 35, 11, 43, 49, 17, 57, 25, 51, 19, 59, 27, 13, 45, 5, 37, 15, 47, 7, 39, 61, 29, 53, 21, 63, 31, 55, 23, 4, 36, 12, 44, 2, 34, 10, 42, 52, 20, 60, 28, 50, 18, 58, 26, 16, 48, 8, 40, 14, 46, 6, 38, 64, 32, 56, 24, 62, 30, 54, 22);\n\nvoid main() {\n  ivec2 F = ivec2(gl_FragCoord.xy);\n  c = vec4(0.);\n  float depth = texelFetch(Depth, F, 0).r;\n  float lut;\n\n  if(depth == 1.) {\n    lut = 1.;\n  } else {\n    float lit = texelFetch(T0, F, 0).r;\n\n    float diff = 0.;\n    for(int i = 0; i < 8; i++) {\n      int step = i/4;\n      float edge = texelFetch(Depth, F + ivec2(i % 2, i % 4 / 2)*step, 0).r + texelFetch(Depth, F - ivec2(i % 2, i % 4 / 2)*step, 0).r - depth * 2.;\n      diff += abs(edge);\n    }\n\n    if(diff > .00007) {\n      //lut = lit>0.1?0.:1.;\n      lut = 0.;\n    } else {\n      lut = lit * 65. > float(b64[F.y % 8 * 8 + F.x % 8]) ? 1. : 0.;\n      //lut = lit * 15. > float(b16[F.y % 4 * 4 + F.x % 4]) ? 1. : 0.;\n      //lut = lit;\n    }\n\n    if(depth > 0.99){\n      lut = (depth-0.99)*7000. > float(b64[F.y % 8 * 8 + F.x % 8]) ? 1. : lut;\n    }\n\n  }\n\n  c.rgb = vec3(lut);\n\n  //c.rgb = texelFetch(T0, F, 0).rgb;\n\n  /*if(texelFetch(T1, F, 0).r == 1.)\n    c.rgb = vec3(0., 0., 1.);*/\n  c.a = 1.;\n}";
 
   // src/shaders/vScreenQuad.glsl
   var vScreenQuad_default = "void main() {\n  int i = gl_VertexID;\n  gl_Position = vec4(i%2*2-1, 1-(i+1)%4/2*2, 0., 1.);\n}";
 
   // src/shaders/vMain.glsl
-  var vMain_default = "uniform mat4 camera;\r\n\r\nin vec3 at;\r\nin vec3 norm;\r\nin vec3 uv;\r\n\r\nout vec3 fuv;\r\nflat out vec3 normal;\r\n\r\nvoid main() {\r\n  vec4 glpos = camera * vec4(at, 1.);\r\n  glpos.y = -glpos.y;\r\n  gl_Position = glpos / glpos.w;\r\n  //int i = gl_VertexID % 6;\r\n  //uv = vec2(foo[i * 2], foo[i * 2 + 1]);\r\n  fuv = uv;\r\n  normal = norm;\r\n}";
+  var vMain_default = "uniform mat4 camera;\r\n\r\nin vec3 at;\r\nin vec3 norm;\r\nin vec3 cell;\r\nin float type;\r\n\r\nout vec3 uv;\r\nflat out vec3 normal;\r\nflat out float cellType;\r\n\r\nvoid main() {\r\n  vec4 glpos = camera * vec4(at, 1.);\r\n  glpos.y = -glpos.y;\r\n  gl_Position = glpos / glpos.w;\r\n  //int i = gl_VertexID % 6;\r\n  //uv = vec2(foo[i * 2], foo[i * 2 + 1]);\r\n  uv = cell;\r\n  cellType = type;\r\n  normal = norm;\r\n}";
 
   // src/shaders.ts
   var shaders = {fMain: fMain_default, vMain: vMain_default, fScreen: fScreen_default, vScreenQuad: vScreenQuad_default};
@@ -424,24 +439,27 @@ ${body}`;
   var t = 0;
   var fov = 50 * Math.PI / 180;
   var aspect = width / height;
-  var zNear = 2;
-  var zFar = 200;
-  var look = lookAt([0, -20, 30], [0, 30, 0], [0, 0, 1]);
+  var zNear = 10;
+  var zFar = 3e3;
+  var look = lookAt([0, -300, 300], [0, 500, 0], [0, 0, 1]);
   var mPerspective = perspective(fov, aspect, zNear, zFar);
   var mCamera = multiply(mPerspective, inverse(look));
   var world = generateCity();
   var divs = 20;
-  var r = 5;
+  var r = 200;
   var ball = mesh(divs, divs, revolutionShader(arr(divs + 1).map((row) => {
     let a = row / divs * Math.PI;
     let [x, y] = [Math.sin(a) * r, Math.sin(a - Math.PI / 2) * r + 15];
-    console.log(row, a, x, y);
     return [x, y];
   }), divs));
-  world.push(ball);
+  var wing = towerMesh(smoothPoly([[0, -4], [14, -5], [0, 3], [-14, -5]], 0.1), [[0, 0], [0.8, 0], [1, 0.5], [1, 1], [0.8, 1.5], [0, 1.5]]);
+  transformShape(translation([0, 13, 5]), wing);
+  var body = towerMesh(smoothPoly([[3, -5], [0, 5], [-3, -5]], 0.2), [[0, 0], [0.8, 0], [1, 2], [1, 4], [0.4, 5], [0, 5]]);
+  transformShape(translation([0, 12, 4]), body);
+  var flyer = combine([body, wing]);
+  world.push(flyer);
   calculateAllNormals(world);
-  var {bufs, elements} = putShapesInElementBuffers(world, defaultAttrs);
-  console.log(bufs, elements);
+  var {bufs, elements} = putShapesInElementBuffers(world, {at: 3, norm: 3, cell: 3, type: 1});
   console.log(`${Date.now() - startTime} ms ${elements.faces.length} faces`);
   setAttrDatabuffers(bufs, pMain);
   function loop() {
@@ -470,17 +488,38 @@ ${body}`;
   function generateCity() {
     let shapes = [];
     let rng = RNG(1);
+    const generateBuildingCurve = (rng2) => {
+      let [x, y] = [rng2() * 20 + 5, 0];
+      let curve = [[0, 0]];
+      let types = [];
+      let w = 2;
+      while (rng2(4) || curve.length == 0) {
+        curve.push([x, y]);
+        let mx = w <= 1 ? 0.8 - rng2() * 0.4 : 1;
+        let dy = w >= 1 ? (rng2() + 0.3) ** 2 * 2 * x : 0;
+        x *= mx;
+        y += dy;
+        types.push(mx > 0.2 ? 2 : 0);
+        w = rng2(5);
+      }
+      curve.push([0, y]);
+      return [curve, types];
+    };
     function generate() {
       for (let i = 0; i < 1e4; i++) {
-        let curve = generateCurve(rng);
+        let [curve, types] = generateBuildingCurve(rng);
         let sectors = (~~rng(5) + 3) * 2;
-        shapes.push(mesh(sectors, curve.length - 1, biRevolutionShader(curve, sectors, 0.7)));
+        let building = mesh(sectors, curve.length - 1, biRevolutionShader(curve, sectors, rng()));
+        for (let v of building.verts) {
+          v.type = types[v.cell[Y]];
+        }
+        shapes.push(building);
       }
     }
     function transformShapes() {
       for (let i = 0; i < 1e4; i++) {
         let s = shapes[i];
-        let mat = multiply(translation([i % 100 - 50, i / 30, 0]), axisRotation([0, 0, 1], rng() * 6));
+        let mat = multiply(translation([10 * (i % 100 * 2 - 100), i / 4, 0]), axisRotation([0, 0, 1], rng() * 6));
         transformShape(mat, s);
       }
     }
