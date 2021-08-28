@@ -10,9 +10,9 @@ export const len = (v: Vec) => mul(v, v) ** 0.5;
 export const scale = (v: Vec, n: number) => v.map(x => x * n) as Vec;
 export const norm = (v: Vec, l = 1) => scale(v, l / len(v));
 export const mul = (v: Vec, w: Vec) => v.reduce((s, x, i) => s + x * w[i], 0);
-export const add = (v: Vec, w: Vec) => v.map((x, i) => x + w[i]);
+export const sum = (v: Vec, w: Vec) => v.map((x, i) => x + w[i]);
 export const sub = (v: Vec, w: Vec) => v.map((x, i) => x - w[i]);
-export const addn = (v: Vec, n: number) => v.map(x => x + n);
+export const sumn = (v: Vec, n: number) => v.map(x => x + n);
 export const angle2d = (a: number) => [Math.cos(a), Math.sin(a)] as [number, number]
 
 export const lerp = (v: Vec, w: Vec, n: number) => v.map((x, i) => x * (1 - n) + w[i] * n);

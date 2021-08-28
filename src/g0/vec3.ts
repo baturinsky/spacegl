@@ -10,10 +10,10 @@ export const len = (v: Vec3) => (v[X] * v[X] + v[Y] * v[Y] + v[Z] * v[Z]) ** 0.5
 export const scale = (v: Vec3, n: number) => [v[X] * n, v[Y] * n, v[Z] * n] as Vec3;
 export const norm = (v: Vec3, l = 1) => scale(v, l / len(v));
 export const mul = (v: Vec3, w: Vec3) => v[X] * w[X] + v[Y] * w[Y] + v[Z] * w[Z];
-export const add = (v: Vec3, w: Vec3) => [v[X] + w[X], v[Y] + w[Y], v[Z] + w[Z]] as Vec3;
-export const addn = (v: Vec3, n: number) => [v[X] + n, v[Y] + n, v[Z] + n] as Vec3;
+export const sum = (v: Vec3, w: Vec3) => [v[X] + w[X], v[Y] + w[Y], v[Z] + w[Z]] as Vec3;
+export const sumn = (v: Vec3, n: number) => [v[X] + n, v[Y] + n, v[Z] + n] as Vec3;
 export const sub = (v: Vec3, w: Vec3) => [v[X] - w[X], v[Y] - w[Y], v[Z] - w[Z]] as Vec3;
-export const reflect = (v: Vec3, normal: Vec3) => add(v, scale(normal, mul(v, normal)))
+export const reflect = (v: Vec3, normal: Vec3) => sum(v, scale(normal, mul(v, normal)))
 export const cross = (a: Vec3, b: Vec3) => [a[Y] * b[Z] - a[Z] * b[Y], a[Z] * b[X] - a[X] * b[Z], a[X] * b[Y] - a[Y] * b[X]] as Vec3;
 
 export const lerp = (v: Vec3, w: Vec3, n: number) => [

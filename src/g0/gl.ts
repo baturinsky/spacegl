@@ -145,8 +145,10 @@ export function drawQuad() {
 /**TODO: autogen all types */
 const uniformTypes = { [gc.INT]: "i", [gc.UNSIGNED_INT]: "ui", [gc.FLOAT]: "f", [gc.FLOAT_VEC3]: "f", [gc.FLOAT_MAT4]: "Matrix4fv" }
 
+export type Uniforms = {  [field: string]: (...args: any[]) => void;};
+
 /**Creates dict of uniform setters*/
-export function uniforms(p: WebGLProgram) {
+export function uniforms(p: WebGLProgram): Uniforms {
   const u: { [field: string]: (...args: any[]) => void } = {};
   for (let i = 0; i < gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS); ++i) {
     const info = gl.getActiveUniform(p, i);
@@ -157,12 +159,11 @@ export function uniforms(p: WebGLProgram) {
       //@ts-ignore
       u[info.name] = (...args) => gl[`uniform${suffix}`](loc, false, ...args);
     else
-      //@ts-ignore
       u[info.name] = (...args) => {
+        //@ts-ignore         
         gl[`uniform${args.length}${suffix}`](loc, ...args);
       }
   }
-  console.log(u);
   return u;
 }
 
@@ -220,4 +221,11 @@ export function setDatabuffers(buffers: ShapeBuffers, elements: shape.Elements) 
 export function setAttrDatabuffers(buffers: ShapeBuffers, prog: WebGLProgram) {
   for (let key in buffers.verts)
     attr(prog, key, buffers.verts[key], buffers.attrs[key]);
+}
+
+export function putShapesInElementBuffers(shapes: shape.Shape[], attrs: { [k: string]: number }) {
+  let elements = shape.shapesToElements(shapes, attrs);
+  let bufs = createDatabuffers(attrs);
+  setDatabuffers(bufs, elements);
+  return [bufs, elements] as [ShapeBuffers, shape.Elements];
 }

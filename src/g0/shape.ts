@@ -21,9 +21,10 @@ export function calculateFlatNormals(s: Shape) {
   }
 }
 
-export const transformShape = (mat: m4.Mat, shape: Shape) => {
-  for (let vert of shape.verts)
-    vert.at = m4.transform(mat, vert.at);
+export const transformShape = (shape: Shape, ...mats: m4.Mat[]) => {
+  for(let mat of mats)
+    for (let vert of shape.verts)
+      vert.at = m4.transform(mat, vert.at);
 }
 
 export function reindexVerts(shape: Shape) {

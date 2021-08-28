@@ -7,6 +7,8 @@ import { arr, X, Y, Z } from "./misc"
 
 const UP = v3.axis[Y];
 
+export const identity = arr(16).map(i => i % 5 ? 0 : 1);
+
 export const multiply = (a: Mat, b: Mat) => a.map((_, n) => {
   let col = n % 4, row4 = n - col;
   return (
@@ -55,8 +57,6 @@ export function inverse(A: Mat) {
   );
   return scale(total, 1 / det);
 };
-
-export const identity = arr(16).map(n => n % 5 ? 0 : 1);
 
 export const set = (m: Mat, s: { [k: number]: number }) => {
   m = [...m];
@@ -139,6 +139,8 @@ export function transform(m: Mat, v: Vec3) {
     (v0 * m[2] + v1 * m[6] + v2 * m[10] + m[14]) / d
   ] as Vec3;
 }
+
+export const scaling = (n: number) => arr(16).map(i => i==15?1:i % 5 ? 0 : n);
 
 export const translation = (v: Vec3) => [
   1, 0, 0, 0,

@@ -11,12 +11,12 @@ void main() {
   ivec2 F = ivec2(gl_FragCoord.xy);
   c = vec4(0.);
   float depth = texelFetch(Depth, F, 0).r;
-  float lut;
+  float lit;
 
   if(depth == 1.) {
-    lut = 1.;
+    lit = 1.;
   } else {
-    float lit = texelFetch(T0, F, 0).r;
+    lit = texelFetch(T0, F, 0).r;
 
     float diff = 0.;
     for(int i = 0; i < 8; i++) {
@@ -27,20 +27,20 @@ void main() {
 
     if(diff > .00007) {
       //lut = lit>0.1?0.:1.;
-      lut = 0.;
+      lit = 0.;
     } else {
-      lut = lit * 65. > float(b64[F.y % 8 * 8 + F.x % 8]) ? 1. : 0.;
-      //lut = lit * 15. > float(b16[F.y % 4 * 4 + F.x % 4]) ? 1. : 0.;
+      lit = lit * 65. > float(b64[F.y % 8 * 8 + F.x % 8]) ? 1. : 0.;
+      //lit = lit * 15. > float(b16[F.y % 4 * 4 + F.x % 4]) ? 1. : 0.;
       //lut = lit;
     }
 
     if(depth > 0.99){
-      lut = (depth-0.99)*7000. > float(b64[F.y % 8 * 8 + F.x % 8]) ? 1. : lut;
+      lit = (depth-0.99)*5000. > float(b64[F.y % 8 * 8 + F.x % 8]) ? 1. : lit;
     }
 
   }
 
-  c.rgb = vec3(lut);
+  c.rgb = vec3(lit);
 
   //c.rgb = texelFetch(T0, F, 0).rgb;
 
