@@ -160,6 +160,8 @@ export function uniforms(p: WebGLProgram): Uniforms {
       u[info.name] = (...args) => gl[`uniform${suffix}`](loc, false, ...args);
     else
       u[info.name] = (...args) => {
+        if(args[0].length > 0)
+          args = args[0];    
         //@ts-ignore         
         gl[`uniform${args.length}${suffix}`](loc, ...args);
       }

@@ -1,7 +1,7 @@
 import { initGeometry, putWorldnBuffers } from "./geometry";
 import * as render from "./render"
-import { Vec2 } from "./g0/vec";
-import { Vec3 } from "./g0/vec3";
+import { Vec2 } from "./g0/v";
+import * as v3 from "./g0/v3";
 import * as kb from "./controls";
 import * as game from "./game"
 
@@ -23,29 +23,44 @@ console.log(`${Date.now() - startTime} ms ${elements.faces.length} faces`);
 let t = 0;
 let paused = false;
 
-let msPerTic = 50;
-
-function update() {
-  //let camera = render.camera([0, -500 + t, 200], viewSize);
-  let camera = render.camera(state.pos, state.dir, viewSize);
-  game.update(msPerTic);
-  render.frame(camera, [bufs, elements]);
+function update(dTime:number) {
+  if(paused)
+    return;
+  game.update(dTime);
+  render.frame(state, [bufs, elements]);
   t++;
 }
 
-update();
+update(0);
 
 let started = false;
 window.onclick = e => {
+  togglePause(false);
   if (!started) {
-    C.requestPointerLock();
-    setInterval(update, msPerTic);
+    let lastTime = Date.now();
+    const loop = () => {
+      update(Date.now() - lastTime)
+      lastTime = Date.now();
+      requestAnimationFrame(loop)
+    }
+    loop();
   }
+  console.log(e);
   started = true;
 }
 
-//loop();
+document.onkeydown = e => {
+  switch(e.code){
+    case "Space":
+      togglePause();
+      break;
+  }
+}
 
-
-
-
+function togglePause(on?:boolean){
+  paused = on==null?!paused:on;
+  if(paused)
+    document.exitPointerLock();
+  else 
+    C.requestPointerLock();
+}

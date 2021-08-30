@@ -1,6 +1,7 @@
 export const X = 0, Y = 1, Z = 2;
-export const arr: (n: number) => number[] = n => [...new Array(n)].map((_, i) => i);
-export const PI2 = Math.PI * 2;
+export const arr = (n: number) => [...new Array(n)].map((_, i) => i);
+export const arrm = <T>(n: number, f: (n: number) => T) => [...new Array(n)].map((_, i) => f ? f(i) : i) as T[];
+export const PI2 = Math.PI * 2, PI = Math.PI, PIH = Math.PI / 2, PIQ = Math.PI / 4;
 
 
 export function RNG(seed: number) {
@@ -9,9 +10,9 @@ export function RNG(seed: number) {
 
 
   let rngi = (n: number) => {
-      return (seed = (seed * 16807) % 2147483647) % n;
-    };
-    
+    return (seed = (seed * 16807) % 2147483647) % n;
+  };
+
   /*let rngi = (n: number) => {
     return ~~(Math.sin(++seed) ** 2 * 1e9 % n) * (n<0?-1:1);
   }*/
@@ -23,7 +24,7 @@ export function RNG(seed: number) {
 }
 
 export function dictMap<T, S>(a: { [id: string]: T }, f: (t: T, k: string, a: { [id: string]: T }) => S) {
-  let res:{ [id: string]: S } = {};
+  let res: { [id: string]: S } = {};
   for (let k in a)
     res[k] = f(a[k], k, a);
   return res;

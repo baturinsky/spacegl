@@ -1,8 +1,8 @@
 //@ts-check
 
 export type Mat = number[];
-import * as v3 from "./vec3"
-import { Vec3 } from "./vec3"
+import * as v3 from "./v3"
+import { Vec3 } from "./v3"
 import { arr, X, Y, Z } from "./misc"
 
 const UP = v3.axis[Y];
@@ -18,14 +18,14 @@ export const multiply = (a: Mat, b: Mat) => a.map((_, n) => {
     b[row4 + 3] * a[col + 12]
   )
 });
-export const add = (a: Mat, b: Mat) => a.map((x, i) => x + b[i]) as Mat;
+export const sum = (a: Mat, b: Mat) => a.map((x, i) => x + b[i]) as Mat;
 export const sub = (a: Mat, b: Mat) => a.map((x, i) => x - b[i]) as Mat;
 export const scale = (m: Mat, n: number) => m.map(x => n * x);
 export const trace = (a: Mat) => a[0] + a[5] + a[10] + a[15];
 
-export const sum = (a: number, b?: Mat, ...args: any[]): Mat => {
+export const sumScale = (a: number, b?: Mat, ...args: any[]): Mat => {
   const v = scale(b, a)
-  return (args.length ? add(v, sum(...(args as [number, Mat, any]))) : v) as Mat;
+  return (args.length ? sum(v, sumScale(...(args as [number, Mat, any]))) : v) as Mat;
 }
 
 export const transpose = (m: Mat) => m.map((_, i) => m[i % 4 * 4 + ~~(i / 4)]);
@@ -49,7 +49,7 @@ export function det(A: Mat) {
 
 export function inverse(A: Mat) {
   let [det, AA, AAA, trA, trAA, trAAA] = matInfo(A);
-  let total = sum(
+  let total = sumScale(
     (trA * trA * trA - 3 * trA * trAA + 2 * trAAA) / 6, identity,
     - (trA * trA - trAA) / 2, A,
     trA, AA,
@@ -150,3 +150,16 @@ export const translation = (v: Vec3) => [
 ]
 
 export const shortMultiply = (a: Mat, b: Mat) => a.map((_, n) => arr(4).reduce((s, i) => s + b[n - n % 4 + i] * a[n % 4 + i * 4], 0));
+
+
+export function camera(at:Vec3, dir:Vec3, [width, height]:[number, number]){
+  const fov = (50 * Math.PI) / 180;
+  const aspect = width / height;
+  const zNear = 5;
+  const zFar = 2000;
+  const look = lookAt(at, v3.sum(at,dir), v3.axis[Z]);
+  
+  const mPerspective = perspective(fov, aspect, zNear, zFar);
+  const mCamera = multiply(mPerspective, inverse(look));  
+  return mCamera;
+}

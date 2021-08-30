@@ -1,13 +1,13 @@
 //@ts-check
 
-import { Vec3 } from "./vec3";
-import * as v3 from "./vec3";
-import * as vec from "./vec";
-import * as m4 from "./mat4";
-import { arr, dictMap, PI2, X, Y, Z } from "./misc";
-import { angle2d, Vec, Vec2, Vec4 } from "./vec";
+import { Vec3 } from "./v3";
+import * as v3 from "./v3";
+import * as vec from "./v";
+import * as m4 from "./m4";
+import { arr, arrm as arrm, dictMap, PI2, X, Y, Z } from "./misc";
+import { angle2d, Vec, Vec2, Vec4 } from "./v";
 
-export type Vert = { ind: number, at: Vec3, norm?: Vec3, cell?: Vec, [key: string]: Vec | number };
+export type Vert = { ind: number, at: Vec3, norm?: Vec3, cell?: Vec, shape?: number, type?: number, [key: string]: Vec | number };
 export type Face = [Vert, Vert, Vert];
 export type Shape = { faces: Face[], verts: Vert[] };
 export type Elements = { faces: Uint32Array; verts: { [k: string]: Float32Array; } };
@@ -22,7 +22,7 @@ export function calculateFlatNormals(s: Shape) {
 }
 
 export const transformShape = (shape: Shape, ...mats: m4.Mat[]) => {
-  for(let mat of mats)
+  for (let mat of mats)
     for (let vert of shape.verts)
       vert.at = m4.transform(mat, vert.at);
 }
@@ -120,17 +120,21 @@ export function mesh(cols: number, rows: number, shader: (x: number, y: number) 
 export const arrToFunc = <T>(arr: T[]) => (n: number) => arr[n]
 export const funcToArr = <T>(f: (n: number) => T, l: number) => arr(l).map(i => f(i))
 
-export const revolutionShader = (curve: Vec2[], sectors: number) =>
-  towerShader(arr(sectors).map(x => angle2d(PI2 / sectors * x)), curve)
+export const revolutionShader = (sectors: number) =>
+  (x: number) => angle2d(PI2 / sectors * x);
 
-export const starShader = (curve: Vec2[], sectors: number, r2: number) =>
-  towerShader(arr(sectors).map(x => angle2d(PI2 / sectors * x).map(c => c * (x % 2 ? 1 : r2)) as Vec2), curve)
+export const starShader = (sectors: number, r2: number) =>
+  (x: number) => angle2d(PI2 / sectors * x).map(c => c * (x % 2 ? 1 : r2));
 
-export const biRevolutionShader = (curve: Vec2[], sectors: number, a: number) =>
-  towerShader(arr(sectors).map(x => angle2d(PI2 / sectors * (x + (x % 2 ? a : 0)))), curve)
+export const biRevolutionShader = (sectors: number, a: number) =>
+  (x: number) => angle2d(PI2 / sectors * (x + (x % 2 ? a : 0)))
 
 export const towerShader = (slice: Vec2[], curve: Vec2[]) => (x: number, y: number): Vec3 => {
-  return [slice[x % slice.length][X] * curve[y][X], slice[x % slice.length][Y] * curve[y][X], curve[y][Y]] as Vec3;
+  return [
+    slice[x % slice.length][X] * curve[y][X],
+    slice[x % slice.length][Y] * curve[y][X],
+    curve[y][Y]
+  ] as Vec3;
 }
 
 export const towerMesh = (slice: Vec2[], curve: Vec2[]) => mesh(slice.length, curve.length - 1, towerShader(slice, curve))
@@ -141,4 +145,4 @@ export const smoothPoly = (curve: Vec[], gap: number) => flat(curve.map((v, i) =
 }))
 
 export const pie3 = (r: number, h: number, sectors: number) =>
-  mesh(sectors, 3, revolutionShader([[0, 0], [r, 0], [r, h], [0, h]], sectors));
+  towerShader([[0, 0], [r, 0], [r, h], [0, h]], arrm(sectors, revolutionShader(sectors)));
