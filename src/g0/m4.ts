@@ -3,11 +3,11 @@
 export type Mat = number[];
 import * as v3 from "./v3"
 import { Vec3 } from "./v3"
-import { arr, X, Y, Z } from "./misc"
+import { PI, range, X, Y, Z } from "./misc"
 
 const UP = v3.axis[Y];
 
-export const identity = arr(16).map(i => i % 5 ? 0 : 1);
+export const identity = range(16).map(i => i % 5 ? 0 : 1);
 
 export const multiply = (a: Mat, b: Mat) => a.map((_, n) => {
   let col = n % 4, row4 = n - col;
@@ -140,7 +140,7 @@ export function transform(m: Mat, v: Vec3) {
   ] as Vec3;
 }
 
-export const scaling = (n: number) => arr(16).map(i => i==15?1:i % 5 ? 0 : n);
+export const scaling = (n: number) => range(16).map(i => i==15?1:i % 5 ? 0 : n);
 
 export const translation = (v: Vec3) => [
   1, 0, 0, 0,
@@ -149,17 +149,15 @@ export const translation = (v: Vec3) => [
   v[X], v[Y], v[Z], 1
 ]
 
-export const shortMultiply = (a: Mat, b: Mat) => a.map((_, n) => arr(4).reduce((s, i) => s + b[n - n % 4 + i] * a[n % 4 + i * 4], 0));
+export const shortMultiply = (a: Mat, b: Mat) => a.map((_, n) => range(4).reduce((s, i) => s + b[n - n % 4 + i] * a[n % 4 + i * 4], 0));
 
 
-export function camera(at:Vec3, dir:Vec3, [width, height]:[number, number]){
-  const fov = (50 * Math.PI) / 180;
-  const aspect = width / height;
-  const zNear = 5;
-  const zFar = 2000;
+export function camera(at:Vec3, dir:Vec3, [width, height]:[number, number], fov:number, [zNear, zFar]:[number, number]){
+  let aspect = width/height;
   const look = lookAt(at, v3.sum(at,dir), v3.axis[Z]);
   
   const mPerspective = perspective(fov, aspect, zNear, zFar);
   const mCamera = multiply(mPerspective, inverse(look));  
   return mCamera;
 }
+

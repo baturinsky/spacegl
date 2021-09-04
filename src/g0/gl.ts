@@ -143,7 +143,7 @@ export function drawQuad() {
 }
 
 /**TODO: autogen all types */
-const uniformTypes = { [gc.INT]: "i", [gc.UNSIGNED_INT]: "ui", [gc.FLOAT]: "f", [gc.FLOAT_VEC3]: "f", [gc.FLOAT_MAT4]: "Matrix4fv" }
+const uniformTypes = { [gc.INT]: "i", [gc.INT]: "ui", [gc.UNSIGNED_INT]: "f", [gc.FLOAT_VEC3]: "f", [gc.FLOAT_MAT4]: "Matrix4fv" }
 
 export type Uniforms = {  [field: string]: (...args: any[]) => void;};
 
@@ -169,6 +169,13 @@ export function uniforms(p: WebGLProgram): Uniforms {
   return u;
 }
 
+export function setUniforms(u:Uniforms, values:{[id:string]:any}){
+  for(let k in values){
+    if(u[k])
+      u[k](values[k])
+  }
+}
+
 export function attributesInfo(p: WebGLProgram) {
   for (let i = 0; i < 10; i++) {
     const info = gl.getActiveAttrib(p, i);
@@ -177,11 +184,11 @@ export function attributesInfo(p: WebGLProgram) {
   }
 }
 
-export function attr(program: WebGLProgram, name: string, buffer: WebGLBuffer, itemSize = 3) {
+export function attr(program: WebGLProgram, name: string, buffer: WebGLBuffer, itemSize = 3, itemType = gc.FLOAT) {
   let loc = gl.getAttribLocation(program, name);
   gl.enableVertexAttribArray(loc);
   gl.bindBuffer(gc.ARRAY_BUFFER, buffer);
-  gl.vertexAttribPointer(loc, itemSize, gc.FLOAT, false, 0, 0);
+  gl.vertexAttribPointer(loc, itemSize, itemType, false, 0, 0);
 }
 
 export function readTextureData(texture: WebGLTexture, width: number, height: number) {
@@ -199,13 +206,16 @@ export function readTextureData(texture: WebGLTexture, width: number, height: nu
 
 /** Data buffers **/
 
-export type ShapeBuffers = { faces: WebGLBuffer, verts: { [k: string]: WebGLBuffer }, attrs: { [k: string]: number } };
+export type ShapeBuffers = { 
+  faces: WebGLBuffer, 
+  verts: { [k: string]: WebGLBuffer }, 
+  attrs: { [k: string]: number[] } };
 
 export function databuffer() {
   return gl.createBuffer();
 }
 
-export function createDatabuffers(attrs: { [k: string]: number } = shape.defaultAttrs) {
+export function createDatabuffers(attrs: { [k: string]: number[] } = shape.defaultAttrs) {
   return { faces: databuffer(), verts: dictMap(attrs, _ => databuffer()), attrs: attrs } as ShapeBuffers;
 }
 
@@ -222,10 +232,10 @@ export function setDatabuffers(buffers: ShapeBuffers, elements: shape.Elements) 
 
 export function setAttrDatabuffers(buffers: ShapeBuffers, prog: WebGLProgram) {
   for (let key in buffers.verts)
-    attr(prog, key, buffers.verts[key], buffers.attrs[key]);
+    attr(prog, key, buffers.verts[key], buffers.attrs[key][shape.ATTRSIZE], buffers.attrs[key][shape.ATTRTYPE]||gc.FLOAT);
 }
 
-export function putShapesInElementBuffers(shapes: shape.Shape[], attrs: { [k: string]: number }) {
+export function putShapesInElementBuffers(shapes: shape.Shape[], attrs: { [k: string]: number[] }) {
   let elements = shape.shapesToElements(shapes, attrs);
   let bufs = createDatabuffers(attrs);
   setDatabuffers(bufs, elements);

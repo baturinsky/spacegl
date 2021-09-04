@@ -25,7 +25,7 @@ let tilt = 0;
 export type State = {
   dir: Vec3;
   time: number;
-  pos: Vec3;
+  at: Vec3;
   vel: number;
   drot: Vec2;
   smoothDrot: Vec2;
@@ -35,7 +35,7 @@ export type State = {
 export function init() {
   state = {
     dir: [1, 0, 0],
-    pos: [0, -300, 0],
+    at: [0, -300, 0],
     vel: 0.05,
     time: 0,
     drot: [0,0],
@@ -63,8 +63,9 @@ export function update(dTime:number){
   ) as v.Vec2;
 
   state.rot = v.sum2(state.rot, state.smoothDrot, 0.006)
+  state.rot[Y] = Math.max(-89,Math.min(state.rot[Y], 89));
 
-  state.smoothDrot = v.scale(state.smoothDrot, 1 - turn*0.1)
+  state.smoothDrot = v.scale(state.smoothDrot, 1 - turn*0.2)
 
   let [yaw, pitch] = state.rot.map(v => v * rad);
 
@@ -88,8 +89,8 @@ export function update(dTime:number){
   }*/
 
   let delta = v3.scale(state.dir, state.vel * dTime);
-  state.vel -= delta[2] * heightToSpeed;
-  state.pos = v3.sum(state.pos, delta);
+  //state.vel -= delta[2] * heightToSpeed;
+  state.at = v3.sum(state.at, delta);
 }
 
 export function initControls(){
@@ -97,6 +98,9 @@ export function initControls(){
     switch(e.type){
       case "mousemove":
         mouseDelta = v.sum(mouseDelta, [e.movementX, e.movementY])
+        break;
+      case "mousedown":
+        state.vel *= e.button==0?2:0.5;
         break;
     }
   }))  

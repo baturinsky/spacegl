@@ -5,10 +5,11 @@ import * as v3 from "./g0/v3"
 import shaders from "./shaders"
 import * as m4 from "./g0/m4"
 import { Elements } from "./g0/shape";
-import { X, Y, Z } from "./g0/misc";
+import { PI, X, Y, Z } from "./g0/misc";
 import { Vec3 } from "./g0/v3";
 import * as game from "./game"
-import { Vec2 } from "./g0/v";
+import { dist, Vec2 } from "./g0/v";
+import { cityDepth } from "./generator";
 
 let
   pMain: WebGLProgram, pScreen: WebGLProgram,
@@ -40,33 +41,43 @@ export function init(size: Vec2) {
 }
 
 export function frame(state: game.State, [bufs, elements]: [g0.ShapeBuffers, Elements]) {
-  let camera = m4.camera(v3.sum(v3.sum(state.pos, v3.scale(state.dir, -5)), [0,0,0]), state.dir, viewSize);
+  I.innerHTML = state.at.map(v=>~~v);
+  let camera = m4.camera(
+    v3.sum(v3.sum(state.at, v3.scale(state.dir, -5)), [0,0,0]), 
+    state.dir, 
+    viewSize, 
+    PI / 4, 
+    [5,cityDepth + dist(state.at, [0,cityDepth*0.5,0])]
+  );
+  let invCamera = m4.inverse(camera);
   //let flyer = m4.lookTo(state.pos, state.dir);
   let fdir = [...state.dir] as Vec3;
   //fdir[Z] = 0;
-  let flyer = m4.lookTo(state.pos, state.dir, [0, 0, 1]);
+  let flyer = m4.lookTo(state.at, state.dir, [0, 0, 1]);
   flyer = m4.multiply(flyer, m4.axisRotation([0,0,1], -(state.smoothDrot[X])*Math.PI/4/100) );
   flyer = m4.multiply(flyer, m4.axisRotation([1,0,0], -(state.smoothDrot[Y])*Math.PI/4/200) );
 
-  let startTime = Date.now();
+  //let startTime = Date.now();
 
   gl.useProgram(pMain);
 
-  pMainUniform.camera(camera);
-  pMainUniform.flyer(flyer);
-  pMainUniform.sun(v3.norm([1, 1, -1]));
-
+  g0.setUniforms(pMainUniform, {camera, flyer, sun:[0,cityDepth,0]})
+  
   gl.bindFramebuffer(gc.FRAMEBUFFER, framebuffer);
+  gl.clear(gc.DEPTH_BUFFER_BIT|gc.COLOR_BUFFER_BIT);
   gl.drawBuffers([
     gc.COLOR_ATTACHMENT0,
     gc.COLOR_ATTACHMENT1
   ]);
-  gl.clear(gc.DEPTH_BUFFER_BIT);
+
 
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bufs.faces);
+  //gl.clear(gc.DEPTH_BUFFER_BIT|gc.COLOR_BUFFER_BIT);
   gl.drawElements(gc.TRIANGLES, elements.faces.length, gc.UNSIGNED_INT, 0);
 
   gl.useProgram(pScreen);
+  g0.setUniforms(pScreenUniform, {invCamera, flyer})
+
   g0.bindTextures(textures, [pScreenUniform.T0, pScreenUniform.T1, pScreenUniform.Depth]);
   gl.bindFramebuffer(gc.FRAMEBUFFER, null);
   gl.drawArrays(gc.TRIANGLES, 0, 6)

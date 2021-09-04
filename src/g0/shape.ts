@@ -4,20 +4,23 @@ import { Vec3 } from "./v3";
 import * as v3 from "./v3";
 import * as vec from "./v";
 import * as m4 from "./m4";
-import { arr, arrm as arrm, dictMap, PI2, X, Y, Z } from "./misc";
+import { range, rangef as rangef, dictMap, PI2, X, Y, Z, PIH } from "./misc";
 import { angle2d, Vec, Vec2, Vec4 } from "./v";
+import * as gc from "./glconst";
 
-export type Vert = { ind: number, at: Vec3, norm?: Vec3, cell?: Vec, shape?: number, type?: number, [key: string]: Vec | number };
+export const ATTRSIZE = 0, ATTRTYPE = 1;
+
+export type Vert = { ind: number, at: Vec3, norm?: Vec3, cell?: Vec, shape?: number, type?: Vec4, [key: string]: Vec | number };
 export type Face = [Vert, Vert, Vert];
 export type Shape = { faces: Face[], verts: Vert[] };
-export type Elements = { faces: Uint32Array; verts: { [k: string]: Float32Array; } };
+export type Elements = { faces: Uint32Array; verts: { [k: string]: Float32Array | Int32Array; } };
 
-export const defaultAttrs = { at: 3, norm: 3, cell: 3 };
+export const defaultAttrs = { at: [3], norm: [3], cell: [3] };
 
 export function calculateFlatNormals(s: Shape) {
   for (let f of s.faces) {
     if (f[2].norm == null || Number.isNaN(f[2].norm[X]))
-      f[2].norm = v3.norm(v3.cross(v3.sub(f[1].at, f[2].at), v3.sub(f[0].at, f[2].at)));
+      f[2].norm = v3.norm(v3.cross(v3.sub(f[0].at, f[2].at), v3.sub(f[1].at, f[2].at)));
   }
 }
 
@@ -53,14 +56,20 @@ export function flat(arr: any[][], makeArray: (n: number) => any[] = (n: number)
   return flattened;
 }
 
-export function shapesToElements(shapes: Shape[], attrs: { [id: string]: number }) {
+export function shapesToElements(shapes: Shape[], attrs: { [id: string]: number[] }) {
   let l = shapes.length;
 
   let faceCount = addUp(shapes.map(s => s.faces))
   let vertCount = addUp(shapes.map(s => s.verts))
 
   let faces = new Uint32Array(faceCount[l] * 3);
-  let verts = dictMap(attrs, v => new Float32Array(vertCount[l] * v))
+  let verts = dictMap(attrs, v => {
+    if (v[ATTRTYPE] && v[ATTRTYPE] != gc.FLOAT) {
+      return new Int32Array(vertCount[l] * v[ATTRSIZE])
+    } else {
+      return new Float32Array(vertCount[l] * v[ATTRSIZE])
+    }
+  })
 
   let f = 0;
   shapes.forEach((shape, shapei) => {
@@ -73,7 +82,7 @@ export function shapesToElements(shapes: Shape[], attrs: { [id: string]: number 
   });
 
   for (let bufName in verts) {
-    let size = attrs[bufName];
+    let size = attrs[bufName][ATTRSIZE];
     let buf = verts[bufName];
     let i = 0;
     if (size == 1) {
@@ -114,11 +123,11 @@ export function mesh(cols: number, rows: number, shader: (x: number, y: number) 
       faces[fi] = [verts[vi + 1 + verticeCols], verts[vi + verticeCols], verts[vi]];
       faces[fi + 1] = [verts[vi + 1], verts[vi + 1 + verticeCols], verts[vi]];
     }
-  return { faces, verts }
+  return { faces, verts } as Shape;
 }
 
 export const arrToFunc = <T>(arr: T[]) => (n: number) => arr[n]
-export const funcToArr = <T>(f: (n: number) => T, l: number) => arr(l).map(i => f(i))
+export const funcToArr = <T>(f: (n: number) => T, l: number) => range(l).map(i => f(i))
 
 export const revolutionShader = (sectors: number) =>
   (x: number) => angle2d(PI2 / sectors * x);
@@ -137,12 +146,36 @@ export const towerShader = (slice: Vec2[], curve: Vec2[]) => (x: number, y: numb
   ] as Vec3;
 }
 
-export const towerMesh = (slice: Vec2[], curve: Vec2[]) => mesh(slice.length, curve.length - 1, towerShader(slice, curve))
+export const towerXShader = (slice: Vec2[], curve: Vec2[]) => (x: number, y: number): Vec3 => {
+  return [
+    slice[x % slice.length][X] * curve[y][X],
+    slice[x % slice.length][Y],
+    curve[y][Y]
+  ] as Vec3;
+}
+
+export const towerMesh = (slice: Vec2[], curve: Vec2[]) => twoCurvesMesh(slice, curve, towerShader);
+
+export const twoCurvesMesh = (
+  slice: Vec2[],
+  curve: Vec2[],
+  shader: (slice: Vec2[], curve: Vec2[]) => (x: number, y: number) => Vec3
+) => mesh(slice.length, curve.length - 1, shader(slice, curve))
 
 export const smoothPoly = (curve: Vec[], gap: number) => flat(curve.map((v, i) => {
   let w = curve[(i + 1) % curve.length];
   return [vec.lerp(v, w, gap), vec.lerp(v, w, 1 - gap)]
 }))
 
+export const smoothPolyFixed = (curve: Vec[], gap: number) => flat(curve.map((v, i) => {
+  let w = curve[(i + 1) % curve.length];
+  let d = vec.dist(v, w);
+  let g = gap / d;
+  return [vec.lerp(v, w, g), vec.lerp(v, w, 1 - g)]
+}))
+
+
 export const pie3 = (r: number, h: number, sectors: number) =>
-  towerShader([[0, 0], [r, 0], [r, h], [0, h]], arrm(sectors, revolutionShader(sectors)));
+  towerShader([[0, 0], [r, 0], [r, h], [0, h]], rangef(sectors, revolutionShader(sectors)));
+
+export const circle = (divs:number) => rangef(divs, i => angle2d(i / (divs - 1) * PI2));
