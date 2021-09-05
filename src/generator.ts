@@ -19,14 +19,13 @@ export const cityCols = 72,
   citySize = cityCols * cityRows,
   cityDepth = cityRows * cityRowGap;
 
-export function putWorldnBuffers(world: any, pMain: WebGLProgram) {
-  let [bufs, elements] = g0.putShapesInElementBuffers(world, { at: [3], norm: [3], cell: [3], type: [4], shape: [1] });
+export function putShapesInBuffers(shapes: any, prog: WebGLProgram, conf:any) {
+  let [bufs, elements] = g0.putShapesInElementBuffers(shapes, conf);
 
-  g0.setAttrDatabuffers(bufs, pMain);
+  g0.setAttrDatabuffers(bufs, prog);
 
   return [bufs, elements] as [g0.ShapeBuffers, shape.Elements];
 }
-
 
 export function initGeometry() {
 
@@ -37,7 +36,7 @@ export function initGeometry() {
 
   let flyer = flyerGeometry();
 
-  world.push(flyer);
+  //world.push(flyer);
 
   for (let i = 0; i < 300; i++) {
     let ship = shipGeometry(rng, i);
@@ -52,8 +51,9 @@ export function initGeometry() {
   }
 
   calculateAllNormals(world);
+  calculateAllNormals([flyer]);
 
-  return world;
+  return [world, [flyer]];
 }
 
 function flyerGeometry() {
@@ -61,45 +61,42 @@ function flyerGeometry() {
     shape.smoothPolyFixed([[0, -4], [6, -5], [0, 4], [-6, -5]], 2),
     [[0, 0], [0.8, 0], [1, 0.5], [1, 1], [0.8, 1.1], [0, 1.1]]
   );
-  ts(wing, m4.translation([0, 13, 5]));
+  ts(wing, m4.translation([0, 3, 5]));
 
   let engine = shape.towerMesh(
     shape.smoothPolyFixed([[-1, 0], [1, 0], [1, 2], [-1, 2]], 0.5),
     [[0, 0], [0.8, 0], [1, 1], [1, 1], [0.5, 3], [0, 3]]
   );
-  ts(engine, m4.axisRotation([1, 0, 0], -PIH), m4.translation([2, 8.5, 6.2]));
+  ts(engine, m4.axisRotation([1, 0, 0], -PIH), m4.translation([2, -1.5, 6.2]));
 
   let engine2 = shape.clone(engine);
   ts(engine2, m4.reflection([1, 0, 0]));
   shape.invert(engine2);
 
-  /*let wing2 = generateShipPart(RNG(Date.now()), [3, 3], [[0, 4], [-2, 4]], [[1, 0], [1.5, 0.5], [1.5, 1], [1, 1.5]])
-  let wing3 = shape.clone(wing2);
-
-  ts(wing2, m4.translation([0, 13, 5]))
-  ts(wing3,  m4.reflection([1,0,0]), m4.translation([0, 13, 5]))*/
-
   let body = shape.towerMesh(
     shape.smoothPolyFixed([[1, -4], [1, 7], [0, 10], [-1, 7], [-1, -4]], 1),
     [[0, 1], [0.8, 1], [1, 2], [1, 3], [0.4, 4], [0, 4]]
   )
-  ts(body, m4.translation([0, 12, 3.5]));
-
-  /*let body2 = generateShipPart(RNG(Date.now()), [3, 3], [[0, 5], [-2, 4]], [[1, -2], [1.5, -1], [1.5, 1], [1, 2]])
-  ts(body2, m4.axisRotation([0,1,0],-PIH), m4.translation([0, 12, 4]));*/
+  ts(body, m4.translation([0, 2, 3.5]));
 
   let flyer = shape.combine([body, wing, engine, engine2])
 
   for (let v of flyer.verts)
     v.type = [FLYER, 0, 0, 0];
 
-  //ts(flyer, m4.scaling(0.25)/*, m4.axisRotation([0,-1,0], 0.45), m4.translation([0, 0, 0])*/);
   ts(flyer,
-    m4.scaling(0.25),
+    m4.scaling(0.2),
     m4.axisRotation([0, -1, 0], Math.PI),
     m4.axisRotation([-1, 0, 0], Math.PI / 2),
-    m4.translation([0, 3, 0])
+    m4.translation([0, 2, 0])
   );
+
+  /*console.log([...flyer.verts].sort((a,b)=>a.at[X]-b.at[X]));
+  console.log([...flyer.verts].sort((a,b)=>a.at[Y]-b.at[Y]));
+  console.log([...flyer.verts].sort((a,b)=>a.at[Z]-b.at[Z]));*/
+
+  //x -1.22265, 1.22265 y 1.125 1.95 z -5.262829175487371 -2
+  //x -0.978 0.978 y 0.5 1.16 z -2.21 0.4
 
   return flyer;
 }
@@ -203,7 +200,7 @@ function generateBuildings(rng: Rng) {
   let buildings: Shape[] = [];
   for (let i = 0; i < citySize; i++) {
     let a = (i % cityCols) / cityCols * PI2;
-    let s = Math.sin(a * 6 + PI / 2)*1.3;
+    let s = Math.sin(a * 6 + PI / 2)*1;
     let density = Math.min(1.4 - Math.abs(0.5 - i / citySize) * 3, s * 0.5 + 1);
     if (density > rng()) {
       let r = 10 + rng(10);

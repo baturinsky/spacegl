@@ -52,7 +52,7 @@ void main() {
       vnorm.y = -vnorm.y;
       at4.y = -at4.y;
     }
-    float shift = fract((1. + sin(float(id) * 1e4)) + time * (id % 2 == 1 ? 3. : -3.)*3e-5);
+    float shift = fract(fract(float(id) / 1e2) + time * (id % 2 == 1 ? 3. : -3.)*3e-5);
     at4.y = at4.y + 5000. - pow(shift*1000.,1.4);
   }
 

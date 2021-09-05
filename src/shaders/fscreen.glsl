@@ -3,6 +3,9 @@ uniform sampler2D T1;
 uniform sampler2D Depth;
 uniform mat4 invCamera;
 uniform mat4 flyer;
+uniform vec3 scp0;
+uniform vec3 scp1;
+uniform vec3 scp2;
 
 in vec2 uv;
 
@@ -28,24 +31,31 @@ void main() {
   float depth = texelFetch(Depth, F, 0).r;
   color = vec4(1.);
 
+  /*if(distance(vec2(scp0.x, -scp0.y), uv)<0.02){
+    color = vec4(1.,0.,0.,1.);
+    return;
+  }
+
+  if(distance(vec2(scp1.x, -scp1.y), uv)<0.02){
+    color = vec4(0.,1.,0.,1.);
+    return;
+  }
+
+  if(distance(vec2(scp2.x, -scp2.y), uv)<0.02){
+    color = vec4(0.,0.,1.,1.);
+    return;
+  }*/
+
   if(depth == 1.) {
-    //color = vec4(texelFetch(T1, F, 0).rgb, 1.);
-    vec4 pos4 = invCamera * vec4(uv * 2. - 1., depth * 2. - 1., 1.);
+    vec4 pos4 = invCamera * vec4(uv.x, -uv.y, depth * 2. - 1., 1.);
     vec3 pos = (pos4 / pos4.w).xyz - flyer[3].xyz;
     pos = pos / length(pos);
-    //color.xyz = vec3(sin((pos.x + pos.y)*1e1)>0.9?1.:0.);
-    //color.xyz = pos / 100.;
-    //float a = atan(pos.x, pos.y);
-    //color.xyz = sin(pos.x * 5e2) > 0.95 || sin(pos.y * 5e2) > 0.95 || sin(pos.z * 5e2) > 0.95 ? pos * 0.5 + 0.5 : vec3(0.);
-
-    //color.xyz = sin(pos.z * 5e2) > 0.85 && sin(pos.x * 5e2) > 0.85 ? pos * 0.5 + 0.5 : vec3(0.);
 
     if(Noise2d(vec2(floor((pos.x+pos.y)*3e2), floor(pos.z*3e2)))>0.99)
       color.xyz = pos * 0.5 + 0.5;
     else
       color.xyz = vec3(0.);
 
-    //color = vec4(uv, depth, 1.);
   } else {
     color = texelFetch(T0, F, 0);
 

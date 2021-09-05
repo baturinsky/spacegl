@@ -40,27 +40,39 @@ export function init(size: Vec2) {
   return [pMain, C] as [WebGLProgram, HTMLCanvasElement]
 }
 
-export function frame(state: game.State, [bufs, elements]: [g0.ShapeBuffers, Elements]) {
-  I.innerHTML = state.at.map(v => ~~v);
+const crashPoints: Vec3[] = [[-1, 1, -1], [1, 1, -1], [0, 1, -2]];
+
+export function frame(state: game.State,
+  [bufs, elements]: [g0.ShapeBuffers, Elements],
+  [bufsF, elementsF]: [g0.ShapeBuffers, Elements]) {
+  I.innerHTML = "LMB click to speed up, RMB to speed down. " + state.at.map(v => ~~v);
+
   let time = state.time;
   let camera = m4.camera(
     v3.sum(v3.sum(state.at, v3.scale(state.dir, -5)), [0, 0, 0]),
     state.dir,
     viewSize,
     PI / 4,
-    [5, cityDepth + dist(state.at, [0, cityDepth * 0.5, 0])]
+    [4, cityDepth + dist(state.at, [0, cityDepth * 0.5, 0])]
   );
   let invCamera = m4.inverse(camera);
+
+
   //let flyer = m4.lookTo(state.pos, state.dir);
   //fdir[Z] = 0;
   let flyer = m4.lookTo(state.at, state.dir, [0, 0, 1]);
   flyer = m4.multiply(flyer, m4.axisRotation([0, 0, 1], -(state.smoothDrot[X]) * Math.PI / 4 / 100));
   flyer = m4.multiply(flyer, m4.axisRotation([1, 0, 0], -(state.smoothDrot[Y]) * Math.PI / 4 / 200));
 
+  let screenCrashPoints = crashPoints.map(p => m4.transform(camera, m4.transform(flyer, p)));
+  //I.innerHTML = screenCrashPoints.flat().map(v => v.toFixed(5));
+
   //let startTime = Date.now();
 
+
   gl.useProgram(pMain);
-  
+
+
   g0.setUniforms(pMainUniform, { camera, flyer, sun: [0, cityDepth, 0], time })
 
   gl.bindFramebuffer(gc.FRAMEBUFFER, framebuffer);
@@ -70,13 +82,20 @@ export function frame(state: game.State, [bufs, elements]: [g0.ShapeBuffers, Ele
     gc.COLOR_ATTACHMENT1
   ]);
 
-
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bufs.faces);
-  //gl.clear(gc.DEPTH_BUFFER_BIT|gc.COLOR_BUFFER_BIT);
+  g0.setAttrDatabuffers(bufs, pMain);
   gl.drawElements(gc.TRIANGLES, elements.faces.length, gc.UNSIGNED_INT, 0);
 
+
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bufsF.faces);
+  g0.setAttrDatabuffers(bufsF, pMain);
+  gl.drawElements(gc.TRIANGLES, elementsF.faces.length, gc.UNSIGNED_INT, 0);
+
   gl.useProgram(pScreen);
-  g0.setUniforms(pScreenUniform, { invCamera, flyer, time })
+  g0.setUniforms(pScreenUniform, {
+    invCamera, flyer, time,
+    scp0: screenCrashPoints[0], scp1: screenCrashPoints[1], scp2: screenCrashPoints[2]
+  })
 
   g0.bindTextures(textures, [pScreenUniform.T0, pScreenUniform.T1, pScreenUniform.Depth]);
   gl.bindFramebuffer(gc.FRAMEBUFFER, null);

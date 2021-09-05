@@ -222,6 +222,7 @@ export function createDatabuffers(attrs: { [k: string]: number[] } = shape.defau
 export function setDatabuffer(buffer: WebGLBuffer, data: BufferSource, bindingPoint = gc.ARRAY_BUFFER) {
   gl.bindBuffer(bindingPoint, buffer);
   gl.bufferData(bindingPoint, data, gc.STATIC_DRAW);
+  gl.bindBuffer(bindingPoint, null);
 }
 
 export function setDatabuffers(buffers: ShapeBuffers, elements: shape.Elements) {
