@@ -46,6 +46,9 @@ export function init() {
 }
 
 export function update(dTime:number){
+  
+  state.time ++;
+
   mouseDelta = mouseDelta.map(
     d => Math.sign(d) * Math.min(30, Math.abs(d) * dTime * 60)
   ) as v.Vec2;

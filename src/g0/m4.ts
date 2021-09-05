@@ -140,7 +140,7 @@ export function transform(m: Mat, v: Vec3) {
   ] as Vec3;
 }
 
-export const scaling = (n: number) => range(16).map(i => i==15?1:i % 5 ? 0 : n);
+export const scaling = (n: number) => range(16).map(i => i == 15 ? 1 : i % 5 ? 0 : n);
 
 export const translation = (v: Vec3) => [
   1, 0, 0, 0,
@@ -152,12 +152,21 @@ export const translation = (v: Vec3) => [
 export const shortMultiply = (a: Mat, b: Mat) => a.map((_, n) => range(4).reduce((s, i) => s + b[n - n % 4 + i] * a[n % 4 + i * 4], 0));
 
 
-export function camera(at:Vec3, dir:Vec3, [width, height]:[number, number], fov:number, [zNear, zFar]:[number, number]){
-  let aspect = width/height;
-  const look = lookAt(at, v3.sum(at,dir), v3.axis[Z]);
-  
+export function camera(at: Vec3, dir: Vec3, [width, height]: [number, number], fov: number, [zNear, zFar]: [number, number]) {
+  let aspect = width / height;
+  const look = lookAt(at, v3.sum(at, dir), v3.axis[Z]);
+
   const mPerspective = perspective(fov, aspect, zNear, zFar);
-  const mCamera = multiply(mPerspective, inverse(look));  
+  const mCamera = multiply(mPerspective, inverse(look));
   return mCamera;
 }
 
+
+export function reflection([a, b, c]: Vec3) {
+  return [
+    1 - 2 * a * a, -2 * a * b, -2 * a * c, 0,
+    -2 * a * b, 1 - 2 * b * b, -2 * b * c, 0,
+    -2 * a * c, -2 * b * c, 1 - 2 * c * c, 0,
+    0, 0, 0, 1
+  ]
+}

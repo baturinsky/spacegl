@@ -8,6 +8,12 @@ in vec2 uv;
 
 out vec4 color;
 
+float Noise2d(in vec2 x) {
+  float xhash = cos(x.x * 37.0);
+  float yhash = cos(x.y * 57.0);
+  return fract(415.92653 * (xhash + yhash));
+}
+
 int b16[16] = int[] (1, 9, 3, 11, 13, 5, 15, 7, 4, 12, 2, 10, 16, 8, 14, 6);
 int b64[64] = int[] (1, 33, 9, 41, 3, 35, 11, 43, 49, 17, 57, 25, 51, 19, 59, 27, 13, 45, 5, 37, 15, 47, 7, 39, 61, 29, 53, 21, 63, 31, 55, 23, 4, 36, 12, 44, 2, 34, 10, 42, 52, 20, 60, 28, 50, 18, 58, 26, 16, 48, 8, 40, 14, 46, 6, 38, 64, 32, 56, 24, 62, 30, 54, 22);
 
@@ -32,7 +38,12 @@ void main() {
     //float a = atan(pos.x, pos.y);
     //color.xyz = sin(pos.x * 5e2) > 0.95 || sin(pos.y * 5e2) > 0.95 || sin(pos.z * 5e2) > 0.95 ? pos * 0.5 + 0.5 : vec3(0.);
 
-    color.xyz = sin(pos.z * 5e2) > 0.85 && sin(pos.x * 5e2) > 0.85 ? pos * 0.5 + 0.5 : vec3(0.);;
+    //color.xyz = sin(pos.z * 5e2) > 0.85 && sin(pos.x * 5e2) > 0.85 ? pos * 0.5 + 0.5 : vec3(0.);
+
+    if(Noise2d(vec2(floor((pos.x+pos.y)*3e2), floor(pos.z*3e2)))>0.99)
+      color.xyz = pos * 0.5 + 0.5;
+    else
+      color.xyz = vec3(0.);
 
     //color = vec4(uv, depth, 1.);
   } else {
@@ -62,7 +73,7 @@ void main() {
     }
 
     if(depth > 0.995 && (depth - 0.99) * 1000. > float(b64[F.y % 8 * 8 + F.x % 8])) {
-      //color = vec4(1.);
+      color = vec4(1.);
     }
 
     /*if(depth > 0.99){

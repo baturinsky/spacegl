@@ -156,6 +156,18 @@ export const towerXShader = (slice: Vec2[], curve: Vec2[]) => (x: number, y: num
 
 export const towerMesh = (slice: Vec2[], curve: Vec2[]) => twoCurvesMesh(slice, curve, towerShader);
 
+export const coveredTowerMesh = (slice: Vec2[], curve: Vec2[]) => {
+  let bottom = curve[0][Y], top = curve[curve.length - 1][Y]
+  const side = (h: number) => mesh(slice.length / 2, 1, (x, y) => [...slice[y == 0 ? x : slice.length - x - 1], h]);
+  let side1 = side(bottom);
+  let side2 = side(top);
+  invert(side1);
+
+  let part = towerMesh(slice, curve);
+
+  return combine([part, side1, side2]);
+}
+
 export const twoCurvesMesh = (
   slice: Vec2[],
   curve: Vec2[],
@@ -164,7 +176,7 @@ export const twoCurvesMesh = (
 
 export const smoothPoly = (curve: Vec[], gap: number) => flat(curve.map((v, i) => {
   let w = curve[(i + 1) % curve.length];
-  return [vec.lerp(v, w, gap), vec.lerp(v, w, 1 - gap)]
+  return [vec.lerp(v, w, gap), vec.lerp(v, w, 1 - gap)] as Vec2[]
 }))
 
 export const smoothPolyFixed = (curve: Vec[], gap: number) => flat(curve.map((v, i) => {
@@ -178,4 +190,21 @@ export const smoothPolyFixed = (curve: Vec[], gap: number) => flat(curve.map((v,
 export const pie3 = (r: number, h: number, sectors: number) =>
   towerShader([[0, 0], [r, 0], [r, h], [0, h]], rangef(sectors, revolutionShader(sectors)));
 
-export const circle = (divs:number) => rangef(divs, i => angle2d(i / (divs - 1) * PI2));
+export const circle = (divs: number) => rangef(divs, i => angle2d(i / (divs - 1) * PI2));
+
+export function clone(shape: Shape) {
+  let s2 = { ...shape };
+  s2.verts = JSON.parse(JSON.stringify(shape.verts));
+  s2.faces = shape.faces.map(f => f.map(v => s2.verts[v.ind])) as Face[];
+  return s2;
+}
+
+export function invert(shape: Shape) {
+  shape.faces = shape.faces.map(f => [f[1],f[0],f[2]]);
+}
+
+export function reflect(shape: Shape, norm: Vec3) {
+  transformShape(shape, m4.reflection(norm));
+  invert(shape);
+}
+

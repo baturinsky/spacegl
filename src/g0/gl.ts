@@ -143,7 +143,7 @@ export function drawQuad() {
 }
 
 /**TODO: autogen all types */
-const uniformTypes = { [gc.INT]: "i", [gc.INT]: "ui", [gc.UNSIGNED_INT]: "f", [gc.FLOAT_VEC3]: "f", [gc.FLOAT_MAT4]: "Matrix4fv" }
+const uniformTypes = { [gc.INT]: "i", [gc.UNSIGNED_INT]: "ui", [gc.FLOAT]: "f", [gc.FLOAT_VEC3]: "f", [gc.FLOAT_MAT4]: "Matrix4fv" }
 
 export type Uniforms = {  [field: string]: (...args: any[]) => void;};
 

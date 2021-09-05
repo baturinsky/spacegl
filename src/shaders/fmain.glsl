@@ -1,4 +1,4 @@
-uniform float t;
+uniform float time;
 
 in vec3 vcell;
 in vec3 vat;
@@ -35,25 +35,34 @@ void main() {
     float x = fract(vcell.x);
     float y = fract(vcell.y);
 
-    if(dist > 500.) {
+    float far = 0., near = 0.;
+
+    if(dist >= 500.) {
       //bright *= float(vtype.a)/256.;
-      bright += x > hm &&
+      far = x > hm &&
         x < 1. - hm &&
         y > vm &&
         y < 1. - vm ? -float(vtype.a) / 256. : .0;
+    }
 
-    } else {
+    if(dist <= 700.) {
       float cols = float(hex2Digit(t1, 1));
       float rows = float(hex2Digit(t1, 0));
       float hb = hexDigitF(t2, 2);
       float vb = hexDigitF(t2, 3);
-      bright += x > hm &&
+      near = x > hm &&
         x < 1. - hm &&
         y > vm &&
         y < 1. - vm &&
         (cols == 1. || fract((x - hm) / (1. - hm*2.) * cols) > hb) &&
         (rows ==1. || fract((y - vm) / (1. - vm*2.) * rows) > vb) ? -1. : .0;
     }
+
+    
+
+    float l = clamp((dist-500.)/200., 0., 1.);
+    bright += mix(near, far, l);
+
   } else if(itype == 4) {
     bright += vat.z * 5e-4 + (fract(vat.y / 20. + 0.55) < .1 || fract(atan(vat.x, vat.z) / 3.141 * 70.) < .1 ? -1. : 0.);
   } else if(itype == 5) {

@@ -1,6 +1,7 @@
 uniform mat4 camera;
 uniform mat4 flyer;
 uniform vec3 sun;
+uniform float time;
 
 in vec3 at;
 in vec3 norm;
@@ -23,7 +24,7 @@ void main() {
   vat = at;
   vnorm = norm;
   vcell = cell;
-  
+
   vtype = ivec4(type);
   vshape = int(shape);
 
@@ -38,11 +39,21 @@ void main() {
     vcolor.rgb = vec3(.9);
   //color = vec4(1., 1., 0., 1.);
 
-  if(vtype.x == 3 ){
+  if(vtype.x == 3) {
     at4 = flyer * at4;
     mat4 fnorm = flyer;
     fnorm[3] = vec4(0.);
-    vnorm = (fnorm * vec4(norm,1.)).xyz;
+    vnorm = normalize((fnorm * vec4(norm, 1.)).xyz);
+  }
+
+  if(vtype.x == 7) {
+    int id = vtype.y;
+    if(id % 2 == 0) {
+      vnorm.y = -vnorm.y;
+      at4.y = -at4.y;
+    }
+    float shift = fract((1. + sin(float(id) * 1e4)) + time * (id % 2 == 1 ? 3. : -3.)*3e-5);
+    at4.y = at4.y + 5000. - pow(shift*1000.,1.4);
   }
 
   vec4 pos = camera * at4;
@@ -50,8 +61,12 @@ void main() {
   pos.y = -pos.y;
 
   //vec3 toSun = sun - vat;
-  vec3 toSun = vec3(0,1000,0);
+  vec3 toSun = vec3(0, 1000, 0);
   light = dot(vnorm, normalize(toSun)) * 0.2 + .9 - length(toSun) * .00014;
+
+  if(vtype.x == 7) {
+    light += 0.2;
+  }
 
   dist = distance(vat, flyer[3].xyz);
 

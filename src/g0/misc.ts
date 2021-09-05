@@ -6,6 +6,8 @@ export const PI2 = Math.PI * 2, PI = Math.PI, PIH = Math.PI / 2, PIQ = Math.PI /
 
 const maxN = 2**31;
 
+export type Rng = (n?: number) => number;
+
 export function RNG(seed: number) {
   if (0 < seed && seed < 1)
     seed = ~~(seed * maxN);
