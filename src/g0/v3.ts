@@ -13,12 +13,13 @@ export const mul = (v: Vec3, w: Vec3) => v[X] * w[X] + v[Y] * w[Y] + v[Z] * w[Z]
 export const sum = (v: Vec3, w: Vec3) => [v[X] + w[X], v[Y] + w[Y], v[Z] + w[Z]] as Vec3;
 export const mulEach = (v: Vec3, w: Vec3) => [v[X] * w[X], v[Y] * w[Y], v[Z] * w[Z]] as Vec3;
 export const sumn = (v: Vec3, n: number) => [v[X] + n, v[Y] + n, v[Z] + n] as Vec3;
+export const sumvn = (v: Vec3, w: Vec3, n: number) => [v[X] + w[X] * n, v[Y] + w[Y] * n, v[Z] + w[Z] * n] as Vec3;
 export const sub = (v: Vec3, w: Vec3) => [v[X] - w[X], v[Y] - w[Y], v[Z] - w[Z]] as Vec3;
 export const reflect = (v: Vec3, normal: Vec3) => sum(v, scale(normal, mul(v, normal)))
 export const cross = (a: Vec3, b: Vec3) => [a[Y] * b[Z] - a[Z] * b[Y], a[Z] * b[X] - a[X] * b[Z], a[X] * b[Y] - a[Y] * b[X]] as Vec3;
 
 export const lerp = (v: Vec3, w: Vec3, n: number) => [
-  v[X] * (1 - n) + w[X] * n, 
-  v[Y] * (1 - n) + w[Y] * n, 
+  v[X] * (1 - n) + w[X] * n,
+  v[Y] * (1 - n) + w[Y] * n,
   v[Z] * (1 - n) + w[Z] * n
 ] as Vec3;

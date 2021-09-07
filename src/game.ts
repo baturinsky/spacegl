@@ -4,6 +4,7 @@ import * as v from "./g0/v";
 import { Vec3 } from "./g0/v3";
 import { Vec2 } from "./g0/v";
 import { X, Y } from "./g0/misc";
+import { crashPixel } from "./render";
 
 const rad = Math.PI / 180;
 const acc = 300;
@@ -38,16 +39,20 @@ export function init() {
     at: [0, -300, 0],
     vel: 0.05,
     time: 0,
-    drot: [0,0],
-    smoothDrot : [0,0],
-    rot: InitialRot,    
+    drot: [0, 0],
+    smoothDrot: [0, 0],
+    rot: InitialRot,
   };
   return state;
 }
 
-export function update(dTime:number){
-  
-  state.time ++;
+export function update(dTime: number) {
+
+  state.time++;
+
+  let velDelta = ((keyPressed[0] ? 1 : 0) + (keyPressed[2] ? -1 : 0)) * dTime * 0.0003;
+
+  state.vel += Math.max(velDelta, -state.vel);
 
   mouseDelta = mouseDelta.map(
     d => Math.sign(d) * Math.min(30, Math.abs(d) * dTime * 60)
@@ -66,9 +71,9 @@ export function update(dTime:number){
   ) as v.Vec2;
 
   state.rot = v.sum2(state.rot, state.smoothDrot, 0.006)
-  state.rot[Y] = Math.max(-89,Math.min(state.rot[Y], 89));
+  state.rot[Y] = Math.max(-89, Math.min(state.rot[Y], 89));
 
-  state.smoothDrot = v.scale(state.smoothDrot, 1 - turn*0.2)
+  state.smoothDrot = v.scale(state.smoothDrot, 1 - turn * 0.2)
 
   let [yaw, pitch] = state.rot.map(v => v * rad);
 
@@ -78,33 +83,62 @@ export function update(dTime:number){
     Math.sin(pitch)
   ]);
 
+  let right = [Math.sin(yaw), -Math.cos(yaw), 0] as Vec3;
+  let left = [-Math.sin(yaw), Math.cos(yaw), 0] as Vec3;
+  let back = [-Math.cos(yaw), -Math.sin(yaw), 0] as Vec3;
+
   tilt += mouseDelta[0];
   tilt *= (1 - 10. * dTime);
 
-  mouseDelta = [0, 0];  
+  mouseDelta = [0, 0];
 
   state.vel *= 1 - friction * dTime;
 
-  /*if (state.vel <= minimumVelocity) {
-    let drop = minimumVelocity - state.vel / 100;
-    state.pos[2] -= drop * heightToSpeed;
-    state.vel += drop;
-  }*/
-
   let delta = v3.scale(state.dir, state.vel * dTime);
-  //state.vel -= delta[2] * heightToSpeed;
   state.at = v3.sum(state.at, delta);
+
+
+  const checkCollisions = true;
+
+  if (checkCollisions) {
+    if (crashPixel[0][2]>10) {
+      state.at = v3.sumvn(state.at, right, state.vel * 10)
+      state.at = v3.sumvn(state.at, back, state.vel * 10)
+      if (state.vel > -0.1)
+        state.vel -= 0.005;
+      //console.log("R");
+    }
+    if (crashPixel[1][2]>10) {
+      state.at = v3.sumvn(state.at, left, state.vel * 10)
+      state.at = v3.sumvn(state.at, back, state.vel * 10)
+      if (state.vel > -0.1)
+        state.vel -= 0.005;
+      //console.log("L");
+    }
+    if (crashPixel[2][2]>10) {
+      state.at = v3.sumvn(state.at, back, state.vel * 100)
+      if (state.vel > -0.1)
+        state.vel -= 0.03;
+      //console.log("B");
+    }
+  }
+
 }
 
-export function initControls(){
-  ["keydown", "keyup", "mousedown", "mouseup", "mousemove"].forEach(t => document.addEventListener(t, (e:MouseEvent) => {
-    switch(e.type){
+export const keyPressed: boolean[] = [];
+
+export function initControls() {
+  ["keydown", "keyup", "mousedown", "mouseup", "mousemove"].forEach(t => document.addEventListener(t, (e: MouseEvent) => {
+    switch (e.type) {
       case "mousemove":
         mouseDelta = v.sum(mouseDelta, [e.movementX, e.movementY])
         break;
       case "mousedown":
-        state.vel *= e.button==0?2:0.5;
+        keyPressed[e.button] = true;
+        break;
+      case "mouseup":
+        keyPressed[e.button] = false;
         break;
     }
-  }))  
+  }))
 }

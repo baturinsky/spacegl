@@ -145,7 +145,7 @@ export function drawQuad() {
 /**TODO: autogen all types */
 const uniformTypes = { [gc.INT]: "i", [gc.UNSIGNED_INT]: "ui", [gc.FLOAT]: "f", [gc.FLOAT_VEC3]: "f", [gc.FLOAT_MAT4]: "Matrix4fv" }
 
-export type Uniforms = {  [field: string]: (...args: any[]) => void;};
+export type Uniforms = { [field: string]: (...args: any[]) => void; };
 
 /**Creates dict of uniform setters*/
 export function uniforms(p: WebGLProgram): Uniforms {
@@ -160,8 +160,8 @@ export function uniforms(p: WebGLProgram): Uniforms {
       u[info.name] = (...args) => gl[`uniform${suffix}`](loc, false, ...args);
     else
       u[info.name] = (...args) => {
-        if(args[0].length > 0)
-          args = args[0];    
+        if (args[0].length > 0)
+          args = args[0];
         //@ts-ignore         
         gl[`uniform${args.length}${suffix}`](loc, ...args);
       }
@@ -169,9 +169,9 @@ export function uniforms(p: WebGLProgram): Uniforms {
   return u;
 }
 
-export function setUniforms(u:Uniforms, values:{[id:string]:any}){
-  for(let k in values){
-    if(u[k])
+export function setUniforms(u: Uniforms, values: { [id: string]: any }) {
+  for (let k in values) {
+    if (u[k])
       u[k](values[k])
   }
 }
@@ -206,10 +206,11 @@ export function readTextureData(texture: WebGLTexture, width: number, height: nu
 
 /** Data buffers **/
 
-export type ShapeBuffers = { 
-  faces: WebGLBuffer, 
-  verts: { [k: string]: WebGLBuffer }, 
-  attrs: { [k: string]: number[] } };
+export type ShapeBuffers = {
+  faces: WebGLBuffer,
+  verts: { [k: string]: WebGLBuffer },
+  attrs: { [k: string]: number[] }
+};
 
 export function databuffer() {
   return gl.createBuffer();
@@ -233,7 +234,7 @@ export function setDatabuffers(buffers: ShapeBuffers, elements: shape.Elements) 
 
 export function setAttrDatabuffers(buffers: ShapeBuffers, prog: WebGLProgram) {
   for (let key in buffers.verts)
-    attr(prog, key, buffers.verts[key], buffers.attrs[key][shape.ATTRSIZE], buffers.attrs[key][shape.ATTRTYPE]||gc.FLOAT);
+    attr(prog, key, buffers.verts[key], buffers.attrs[key][shape.ATTRSIZE], buffers.attrs[key][shape.ATTRTYPE] || gc.FLOAT);
 }
 
 export function putShapesInElementBuffers(shapes: shape.Shape[], attrs: { [k: string]: number[] }) {
@@ -241,4 +242,51 @@ export function putShapesInElementBuffers(shapes: shape.Shape[], attrs: { [k: st
   let bufs = createDatabuffers(attrs);
   setDatabuffers(bufs, elements);
   return [bufs, elements] as [ShapeBuffers, shape.Elements];
+}
+
+function clientWaitAsync(sync: WebGLSync, flags: number, interval_ms: number) {
+  return new Promise((resolve, reject) => {
+    function test() {
+      const res = gl.clientWaitSync(sync, flags, 0);
+      if (res == gl.WAIT_FAILED) {
+        reject();
+        return;
+      }
+      if (res == gl.TIMEOUT_EXPIRED) {
+        setTimeout(test, interval_ms);
+        return;
+      }
+      resolve(null);
+    }
+    test();
+  });
+}
+
+async function getBufferSubDataAsync(
+  target: number, buffer: WebGLBuffer, srcByteOffset: number, dstBuffer: ArrayBufferView,
+  dstOffset?: number, length?: number) {
+  const sync = gl.fenceSync(gc.SYNC_GPU_COMMANDS_COMPLETE, 0);
+  gl.flush();
+
+  await clientWaitAsync(sync, 0, 10);
+  gl.deleteSync(sync);
+
+  gl.bindBuffer(target, buffer);
+  gl.getBufferSubData(target, srcByteOffset, dstBuffer, dstOffset, length);
+  gl.bindBuffer(target, null);
+
+  return dstBuffer;
+}
+
+export async function readPixelsAsync(x: number, y: number, w: number, h: number, format: number, type: number, dstBuffer: ArrayBufferView) {
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gc.PIXEL_PACK_BUFFER, buf);
+  gl.bufferData(gc.PIXEL_PACK_BUFFER, dstBuffer.byteLength, gc.STREAM_READ);
+  gl.readPixels(x, y, w, h, format, type, 0);
+  gl.bindBuffer(gc.PIXEL_PACK_BUFFER, null);
+
+  await getBufferSubDataAsync(gc.PIXEL_PACK_BUFFER, buf, 0, dstBuffer);
+
+  gl.deleteBuffer(buf);
+  return dstBuffer;
 }

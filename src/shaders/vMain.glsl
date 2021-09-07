@@ -52,8 +52,8 @@ void main() {
       vnorm.y = -vnorm.y;
       at4.y = -at4.y;
     }
-    float shift = fract(fract(float(id) / 1e2) + time * (id % 2 == 1 ? 3. : -3.)*3e-5);
-    at4.y = at4.y + 5000. - pow(shift*1000.,1.4);
+    float shift = fract(fract(float(id) / 2e2) + time * (id % 2 == 1 ? 3. : -3.)*3e-5);
+    at4.y = at4.y + 5000. - pow(shift*200.,2.);
   }
 
   vec4 pos;
@@ -67,9 +67,9 @@ void main() {
   vat = at4.xyz;
   pos.y = -pos.y;
 
-  //vec3 toSun = sun - vat;
-  vec3 toSun = vec3(0, 1000, 0);
-  light = dot(vnorm, normalize(toSun)) * 0.2 + .9 - length(toSun) * .00014;
+  vec3 toSun = sun - vat;
+  //vec3 toSun = vec3(0, 1000, 0);
+  light = dot(vnorm, normalize(toSun)) * 0.2 + .9 - length(toSun) * 1e-6;
 
   if(vtype.x == 7) {
     light += 0.2;

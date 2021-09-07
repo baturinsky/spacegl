@@ -2,6 +2,7 @@ uniform sampler2D T0;
 uniform sampler2D T1;
 uniform sampler2D Depth;
 uniform mat4 invCamera;
+uniform mat4 invPerspective;
 uniform mat4 flyer;
 uniform vec3 scp0;
 uniform vec3 scp1;
@@ -28,45 +29,46 @@ const bool ditherOn = true;
 const float collisionDepth = 0.6;
 
 void main() {
+
   ivec2 F = ivec2(gl_FragCoord.xy);
+
   float depth = texelFetch(Depth, F, 0).r;
   color = vec4(1.);
 
-  if(F.y < 2) {
-    color = (texelFetch(Depth, ivec2(scp0.xy), 0).r < collisionDepth ||
-      texelFetch(Depth, ivec2(scp1.xy), 0).r < collisionDepth ||
-      texelFetch(Depth, ivec2(scp2.xy), 0).r < collisionDepth) ? vec4(1., 0., 0., 1.) : vec4(0., 0., 0., 1.);
+  vec4 screenPos = vec4(uv.x, -uv.y, depth * 2. - 1., 1.);
+
+  vec4 pos4 = invCamera * screenPos;
+  vec3 pos = (pos4 / pos4.w).xyz - flyer[3].xyz;
+
+  if(distance(vec2(scp0.x, scp0.y), vec2(F)) < 10.) {
+    color = vec4(1., 0., 0., 1.);
     return;
   }
 
-  /*if(distance(vec2(scp0.x, -scp0.y), uv) < 0.01) {
-    if(depth < collisionDepth) {
-      color = vec4(1., 0., 0., 1.);
-      return;
-    }
+  if(distance(vec2(scp1.x, scp1.y), vec2(F)) < 10.) {
+    color = vec4(0., 1., 0., 1.);
+    return;
   }
 
-  if(distance(vec2(scp1.x, -scp1.y), uv) < 0.01) {
-    if(depth < collisionDepth) {
-      color = vec4(0., 1., 0., 1.);
-      return;
-    }
+  if(distance(vec2(scp2.x, scp2.y), vec2(F)) < 10.) {
+    color = vec4(0., 0., 1., 1.);
+    return;
   }
 
-  if(distance(vec2(scp2.x, -scp2.y), uv) < 0.01) {
-    if(depth < collisionDepth) {
-      color = vec4(0., 0., 1., 1.);
-      return;
-    }
-  }*/
+  if(F.y < 4 && F.x < 4) {
+    color = vec4(
+      texelFetch(Depth, ivec2(scp0.xy), 0).r < collisionDepth ? 1. : 0., 
+      texelFetch(Depth, ivec2(scp1.xy), 0).r < collisionDepth ? 1. : 0., 
+      texelFetch(Depth, ivec2(scp2.xy), 0).r < collisionDepth ? 1. : 0., 1.);
+    return;
+  }
 
   if(depth == 1.) {
-    vec4 pos4 = invCamera * vec4(uv.x, -uv.y, depth * 2. - 1., 1.);
-    vec3 pos = (pos4 / pos4.w).xyz - flyer[3].xyz;
-    pos = pos / length(pos);
 
-    if(Noise2d(vec2(floor((pos.x + pos.y) * 3e2), floor(pos.z * 3e2))) > 0.99)
-      color.xyz = pos * 0.5 + 0.5;
+    vec3 pos1 = pos / length(pos);
+
+    if(Noise2d(vec2(floor((pos1.x + pos1.y) * 3e2), floor(pos1.z * 3e2))) > 0.99)
+      color.xyz = pos1 * 0.5 + 0.5;
     else
       color.xyz = vec3(0.);
 
@@ -85,8 +87,10 @@ void main() {
       diff += abs(edge);
     }
 
+    if(depth > 0.99)
+      diff *= 1. + (depth - 0.99);
+
     if(diff > .00005) {
-      //lut = lit>0.1?0.:1.;
       color.rgb = normalize(color.rgb) * 0.3;
     } else {
       if(ditherOn) {
@@ -94,25 +98,14 @@ void main() {
         color.g = dither(color.g, F);
         color.b = dither(color.b, F);
       }
-      //lit = lit * 15. > float(b16[F.y % 4 * 4 + F.x % 4]) ? 1. : 0.;
-      //lut = lit;
     }
 
     if(depth > 0.995 && (depth - 0.99) * 1000. > float(b64[F.y % 8 * 8 + F.x % 8])) {
       color = vec4(1.);
     }
-
-    /*if(depth > 0.99){
-      color.rgb += (depth - 0.99) * 10.;
-    }*/
-
   }
 
-  //color = vec4(texelFetch(T1, F, 0).rgb, 1.);
+  //color = (color + 0.5) * texelFetch(T1, F, 0);
 
-  //c.rgb = texelFetch(T0, F, 0).rgb;
-
-  /*if(texelFetch(T1, F, 0).r == 1.)
-    c.rgb = vec3(0., 0., 1.);*/
   color.a = 1.;
 }

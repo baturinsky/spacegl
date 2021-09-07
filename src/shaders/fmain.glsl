@@ -1,4 +1,5 @@
 uniform float time;
+uniform float pass;
 
 in vec3 vcell;
 in vec3 vat;
@@ -79,6 +80,8 @@ void main() {
   //c0 = vec4(light, 0., 0., 1.);
   c0 = vec4(vcolor.rgb * bright, vcolor.a);
   //c1 = vec4(gl_FrontFacing?0.:1.,0.,0.,0.);
-  c1 = vec4(vat / 1000. + 0.5, 1.);
+  //c1 = vec4(vat / 1000. + 0.5, 1.);
   //c1 = vec4(1.,0.,0.,1.);
+  //if(pass == 0.)
+  c1 = vec4(gl_FragCoord.xyz * gl_FragCoord.w, 1.);
 }

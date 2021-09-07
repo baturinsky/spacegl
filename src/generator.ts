@@ -13,7 +13,7 @@ const ts = shape.transformShape;
 const BUILDING = 2, FLYER = 3, TUNNEL = 4, WARPER = 5, SHIP = 7, FIXED = 8;
 
 export const cityCols = 72,
-  cityRows = 120,
+  cityRows = 180,
   cityRadius = 400,
   cityRowGap = 40,
   citySize = cityCols * cityRows,
@@ -38,7 +38,7 @@ export function initGeometry() {
 
   //world.push(flyer);
 
-  for (let i = 0; i < 300; i++) {
+  for (let i = 0; i < 150; i++) {
     let ship = shipGeometry(rng, i);
     let sector = i % 6;
     ts(ship,
@@ -50,7 +50,7 @@ export function initGeometry() {
     world.push(ship);
   }
 
-  let ui = shape.mesh(1, 1, (x, y) => [x*2 - 1, y*0.05 + 0.95, 0]);
+  let ui = shape.mesh(1, 1, (x, y) => [x * 2 - 1, y * 0.05 + 0.95, 0]);
   shape.setType(ui, v => [FIXED, 0, 0, 0])
   world.push(ui);
 
@@ -114,7 +114,7 @@ function generateCity(rng: Rng) {
   tunnelCity(buildings, rng);
   buildings.forEach(b => b && shapes.push(b));
 
-  let tunnel = tunnelGeometry(rng, cityCols, cityRadius, cityRadius * 1.3, cityRows * cityRowGap);
+  let tunnel = tunnelGeometry(rng, 72, cityRadius, cityRadius * 1.3, cityRows * cityRowGap);
   ts(tunnel, m4.axisRotation(v3.axis[X], -Math.PI / 2))
 
   shapes.push(tunnel)
@@ -177,23 +177,30 @@ function roundTower(rng: Rng, r: number, i: number) {
   return building;
 }
 
-function roundTower2(rng: Rng, r: number, i: number, size: number) {
-  let [curve, types] = generateBuildingCurve(rng, size, r);
+function roundTower2(rng: Rng, r: number, i: number, height: number) {
 
-  let sectors = (rng(4) + 4);
-  let slice: Vec2[];
+  let slice: Vec2[], curve: v.Vec2[], types: v.Vec4[];
 
-  slice = rangef(sectors, a => shape.revolutionShader(sectors)(a));
+  let simple = rng(4);
 
-  if (!rng(3))
-    slice = shape.smoothPoly(slice, 0.1);
+  if (simple) {
+    [curve, types] = generateBuildingCurve(rng, height/2, r * (0.5 + rng()*0.4), true);
+    slice = [[1, 1], [-1, 1], [-1, -1], [1, -1]];
+  } else {
+    let sectors = rng(4) + 4;
+    [curve, types] = generateBuildingCurve(rng, height, r);
+    slice = rangef(sectors, a => shape.revolutionShader(sectors)(a));
 
-  if (rng(4) == 0)
-    slice.forEach(v => v[Y] += 0.95);
+    if (!rng(3))
+      slice = shape.smoothPoly(slice, 0.1);
+
+    if (rng(4) == 0)
+      slice.forEach(v => v[Y] += 0.95);
+  }
 
   let building = shape.twoCurvesMesh(slice, curve, shape.towerShader);
   for (let v of building.verts) {
-    v.type = types[v.cell[Y]];
+    v.type = types ? types[v.cell[Y]] : [2, 0, 0, 0];
     v.shape = i;
   }
   return building;
@@ -203,13 +210,14 @@ function generateBuildings(rng: Rng) {
   let buildings: Shape[] = [];
   for (let i = 0; i < citySize; i++) {
     let a = (i % cityCols) / cityCols * PI2;
-    let s = Math.sin(a * 6 + PI / 2) * 1;
+    let s = Math.sin(a * 6 + PI / 2);
     let density = Math.min(1.4 - Math.abs(0.5 - i / citySize) * 3, s * 0.5 + 1);
-    if (density > rng()) {
-      let r = 10 + rng(10);
-      if (!rng(100))
-        r *= 2;
-      let building = roundTower2(rng, r, i, density * 13 / r);
+    if (density > rng() * 0.5) {
+      let r = (10 + rng(5)) * (1 + density);
+      if (!rng(10) && s > 0)
+        r *= 1.2;
+      r = Math.min(18, r);
+      let building = roundTower2(rng, r * (0.5+rng()*0.5), i, density * 20 / r * (8 + rng(10)));
       buildings[i] = building;
     }
   }
@@ -222,7 +230,7 @@ function tunnelCity(shapes: Shape[], rng: Rng) {
       continue;
     let a = (i % cityCols) / cityCols * PI2;
     ts(shapes[i],
-      m4.axisRotation(v3.axis[Z], rng() * PI2),
+      //m4.axisRotation(v3.axis[Z], rng() * PI2),
       m4.translation([0, i / citySize * cityDepth, -cityRadius]),
       m4.axisRotation(v3.axis[Y], a)
     );
@@ -252,32 +260,36 @@ function flatCity(shapes: Shape[], rng: Rng) {
 
 const HM = 0, VM = 1, HB = 2, VB = 3;
 
-function generateBuildingCurve(rng: (v?: number) => number, size: number, r: number) {
+function generateWindows(rng: Rng) {
+  let gaps = [rng(6) + 2, rng(6) + 2, rng(6), rng(6)];
+  let windowDensity = [(rng() + 0.3) / 4, (rng() + 0.3)]
+  return [gaps, windowDensity]
+}
+
+function generateBuildingCurve(rng: Rng, height: number, r: number, simple = false) {
   let [x, y] = [1, 0];
-  let curve = [[0, 0], [x * r, 0]] as Vec2[];
-  let types = [[0, 0, 0, 0]] as Vec4[];
+  let curve = [[x * r, 0]] as Vec2[];
+  let types = [] as Vec4[];
+
   // 0 = horisontal, 1 - diagonal, 2+ - vertical
   let w = 2, b = 0;
-  let gaps = [rng(6) + 2, rng(6) + 2, rng(6), rng(6)];
-  let windowDensity = [r * (rng() + 0.3) / 4, r * (rng() + 0.3)]
-  while (x > 0.2 && y < 20 * size && (y < 10 * size || rng(3) || curve.length < 4)) {
+  let [gaps, windowDensity] = generateWindows(rng);
+  while (y < height) {
     let dx = w > 1 ? 0 : x * (0.1 + rng() * 0.5) * (rng(4) ? -1 : 1);
-    if (x + dx > 1)
+    if (x + dx > 1 || x + dx < 0.3)
       dx = -dx;
-    let dy = w * (x + (b++) / 10) * (rng() + 0.3) ** 2;
+    let dy = simple ? height : (w>0?1:0) * (rng() * (height*1.1-y));
     if (y < 5 && dy > 0)
       dy++;
     x += dx;
     y += dy;
-    if (y > 20 * size)
-      y = (20 + rng() * 3) * size;
+    if (y > height)
+      y = height;
     curve.push([x * r, y * r]);
-    let cols = ~~(dy * windowDensity[0]) || 1;
-    let rows = ~~(x * windowDensity[1]) || 1;
+    let cols = ~~(dy * windowDensity[0] * r) || 1;
+    let rows = ~~(x * windowDensity[1] * r) || 1;
 
-    //console.log(cols,rows);
-
-    let windowArea = (1 - gaps[HM] / 15) * (1 - gaps[VM] / 15) /** (1 - g[HB]*0.1) * (1 - g[VB]*0.1)*/;
+    let windowArea = (1 - gaps[HM] / 15) * (1 - gaps[VM] / 15);
 
     if (dx != 0)
       cols = 1;
@@ -305,7 +317,7 @@ function generateShipPart(rng: Rng, bends: Vec2, bounds: [Vec2, Vec2], curve: Ve
   if (step < 0)
     return;
   for (let i = 0; i < 20; i++) {
-    x = x + rng() * step;
+    x = x + rng() * step * 2;
     if (x > bounds[X][1])
       x = bounds[X][1]
     if (rng() < bends[0] / (bends[0] + bends[1]))
@@ -333,7 +345,7 @@ function shipGeometry(rng: Rng, id: number) {
 
   let wing1 = generateShipPart(
     rng,
-    [rng(3) + 1, rng(3) + 1],
+    [rng(4) + 1, rng(4) + 1],
     [[0, hullWidth + 1 + rng(5)], [-2 - rng() * hullLength / 3, 6 + rng() * hullLength / 2]],
     [[1, 0], [1.5, wingWidth * 0.33], [1.5, wingWidth * 0.66], [1, wingWidth]]
   )

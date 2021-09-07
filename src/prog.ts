@@ -27,19 +27,6 @@ function main() {
   let [bufs, elements] = putShapesInElementBuffers(world, conf);
   let [bufsF, elementsF] = putShapesInElementBuffers(flyer, conf);
 
-  //setAttrDatabuffers(bufs, pMain)
-
-  /*let [bufs, elements] = putShapesInBuffers(world, pMain);
-
-  let [b,a] = putShapesInElementBuffers(flyer, { at: [3], norm: [3], cell: [3], type: [4], shape: [1] });
-  setAttrDatabuffers(b, pMain);
-
-  putShapesInBuffers(flyer, pMain);*/
-
-  //let [bufsF, elementsF] = putShapesInBuffers(flyer, pMain);
-
-  /*gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bufs.faces);*/
-
   console.log(`${Date.now() - startTime} ms ${elements.faces.length} faces`);
 
   let t = 0;
@@ -60,7 +47,10 @@ function main() {
           update(Date.now() - lastTime)
         lastTime = Date.now();
         //requestAnimationFrame(()=>{new Promise(r=>r(null)).then(loop)})
-        setTimeout(loop, 1000/60);
+        //requestAnimationFrame(()=>setTimeout(loop, 0));
+        //setTimeout(loop, 1000/60);
+        //requestPostAnimationFrame(()=>setTimeout(loop, 0));
+        requestAnimationFrame(loop);
       }
       loop();
     }
@@ -103,3 +93,5 @@ function testSound() {
 }
 
 main();
+
+

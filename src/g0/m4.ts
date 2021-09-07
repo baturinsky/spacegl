@@ -152,13 +152,13 @@ export const translation = (v: Vec3) => [
 export const shortMultiply = (a: Mat, b: Mat) => a.map((_, n) => range(4).reduce((s, i) => s + b[n - n % 4 + i] * a[n % 4 + i * 4], 0));
 
 
-export function camera(at: Vec3, dir: Vec3, [width, height]: [number, number], fov: number, [zNear, zFar]: [number, number]) {
+export function viewMatrices(at: Vec3, dir: Vec3, [width, height]: [number, number], fov: number, [zNear, zFar]: [number, number]) {
   let aspect = width / height;
   const look = lookAt(at, v3.sum(at, dir), v3.axis[Z]);
 
   const mPerspective = perspective(fov, aspect, zNear, zFar);
   const mCamera = multiply(mPerspective, inverse(look));
-  return mCamera;
+  return [mCamera, mPerspective, look];
 }
 
 

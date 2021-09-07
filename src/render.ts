@@ -4,8 +4,8 @@ import * as gc from "./g0/glconst";
 import * as v3 from "./g0/v3"
 import shaders from "./shaders"
 import * as m4 from "./g0/m4"
-import { Elements } from "./g0/shape";
-import { PI, X, Y, Z } from "./g0/misc";
+import { Elements, invert } from "./g0/shape";
+import { PI, rangef, X, Y, Z } from "./g0/misc";
 import { Vec3 } from "./g0/v3";
 import * as game from "./game"
 import { dist, Vec2, mulEach } from "./g0/v";
@@ -40,15 +40,15 @@ export function init(size: Vec2) {
   return [pMain, C] as [WebGLProgram, HTMLCanvasElement]
 }
 
-const crashPoints: Vec3[] = [[-1.1, 1, -1], [1.1, 1, -1], [0, 1, -2]];
+const crashPoints: Vec3[] = [[-1, 1, -1], [1, 1, -1], [0, 1, -1]];
 
 export function frame(state: game.State,
   [bufs, elements]: [g0.ShapeBuffers, Elements],
   [bufsF, elementsF]: [g0.ShapeBuffers, Elements]) {
-  I.innerHTML = "LMB click to speed up, RMB to speed down. " + state.at.map(v => ~~v);
+  I.innerHTML = `LMB click to speed up, RMB to speed down. ${state.at.map(v => ~~v)} | ${crashPixel[0][2]};${crashPixel[1][2]};${crashPixel[2][2]}`;
 
   let time = state.time;
-  let camera = m4.camera(
+  let [camera, perspective, look] = m4.viewMatrices(
     v3.sum(v3.sum(state.at, v3.scale(state.dir, -5)), [0, 0, 0]),
     state.dir,
     viewSize,
@@ -66,8 +66,8 @@ export function frame(state: game.State,
 
   let screenCrashPoints = crashPoints.map(p => {
     let a = m4.transform(camera, m4.transform(flyer, p));
-    a[X] = ~~((a[X]*0.5+0.5)*viewSize[X]);
-    a[Y] = ~~((a[Y]*0.5+0.5)*viewSize[Y]);
+    a[X] = ~~((a[X] * 0.5 + 0.5) * viewSize[X]);
+    a[Y] = ~~((0.5 - a[Y] * 0.5) * viewSize[Y]);
     a[Z] = 0;
     return a;
   });
@@ -76,9 +76,7 @@ export function frame(state: game.State,
 
   let startTime = Date.now();
 
-
   gl.useProgram(pMain);
-
 
   g0.setUniforms(pMainUniform, { camera, flyer, sun: [0, cityDepth, 0], time })
 
@@ -89,9 +87,15 @@ export function frame(state: game.State,
     gc.COLOR_ATTACHMENT1
   ]);
 
+  g0.setUniforms(pMainUniform, { pass: 0 });
+
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bufs.faces);
   g0.setAttrDatabuffers(bufs, pMain);
   gl.drawElements(gc.TRIANGLES, elements.faces.length, gc.UNSIGNED_INT, 0);
+
+  checkCrash(screenCrashPoints);
+
+  g0.setUniforms(pMainUniform, { pass: 1 });
 
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bufsF.faces);
   g0.setAttrDatabuffers(bufsF, pMain);
@@ -99,7 +103,7 @@ export function frame(state: game.State,
 
   gl.useProgram(pScreen);
   g0.setUniforms(pScreenUniform, {
-    invCamera, flyer, time,
+    invCamera, flyer, time, invPerspective: m4.inverse(perspective),
     scp0: screenCrashPoints[0], scp1: screenCrashPoints[1], scp2: screenCrashPoints[2]
   })
 
@@ -107,17 +111,17 @@ export function frame(state: game.State,
   gl.bindFramebuffer(gc.FRAMEBUFFER, null);
   gl.drawArrays(gc.TRIANGLES, 0, 6)
 
-  gl.flush();
-
-  let pixels = new Uint8Array(40);
-  gl.readPixels(1, 1, 1, 1, gc.RGBA, gc.UNSIGNED_BYTE, pixels);
-  if(pixels[0] == 255){
-    console.log("CRASH");
-  }
-
-  gl.flush()
-
   //console.log(`Rendered in ${Date.now() - startTime} ms`);
 
 }
 
+export let crashPixel = rangef(4, _ => new Uint8Array(4));
+
+async function checkCrash(screenCrashPoints: Vec3[]) {
+  //gl.readPixels(1, 1, 1, 1, gc.RGBA, gc.UNSIGNED_BYTE, pixels);
+  //await g0.readPixelsAsync(1, 1, 1, 1, gc.RGBA, gc.UNSIGNED_BYTE, crashPixel);
+  gl.readBuffer(gc.COLOR_ATTACHMENT1);
+  await Promise.all(rangef(3, n =>
+    g0.readPixelsAsync(screenCrashPoints[n][X], screenCrashPoints[n][Y], 1, 1, gc.RGBA, gc.UNSIGNED_BYTE, crashPixel[n])
+  ));
+}
