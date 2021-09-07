@@ -8,7 +8,7 @@ import { Elements } from "./g0/shape";
 import { PI, X, Y, Z } from "./g0/misc";
 import { Vec3 } from "./g0/v3";
 import * as game from "./game"
-import { dist, Vec2 } from "./g0/v";
+import { dist, Vec2, mulEach } from "./g0/v";
 import { cityDepth } from "./generator";
 
 let
@@ -40,7 +40,7 @@ export function init(size: Vec2) {
   return [pMain, C] as [WebGLProgram, HTMLCanvasElement]
 }
 
-const crashPoints: Vec3[] = [[-1, 1, -1], [1, 1, -1], [0, 1, -2]];
+const crashPoints: Vec3[] = [[-1.1, 1, -1], [1.1, 1, -1], [0, 1, -2]];
 
 export function frame(state: game.State,
   [bufs, elements]: [g0.ShapeBuffers, Elements],
@@ -64,10 +64,17 @@ export function frame(state: game.State,
   flyer = m4.multiply(flyer, m4.axisRotation([0, 0, 1], -(state.smoothDrot[X]) * Math.PI / 4 / 100));
   flyer = m4.multiply(flyer, m4.axisRotation([1, 0, 0], -(state.smoothDrot[Y]) * Math.PI / 4 / 200));
 
-  let screenCrashPoints = crashPoints.map(p => m4.transform(camera, m4.transform(flyer, p)));
+  let screenCrashPoints = crashPoints.map(p => {
+    let a = m4.transform(camera, m4.transform(flyer, p));
+    a[X] = ~~((a[X]*0.5+0.5)*viewSize[X]);
+    a[Y] = ~~((a[Y]*0.5+0.5)*viewSize[Y]);
+    a[Z] = 0;
+    return a;
+  });
+
   //I.innerHTML = screenCrashPoints.flat().map(v => v.toFixed(5));
 
-  //let startTime = Date.now();
+  let startTime = Date.now();
 
 
   gl.useProgram(pMain);
@@ -86,7 +93,6 @@ export function frame(state: game.State,
   g0.setAttrDatabuffers(bufs, pMain);
   gl.drawElements(gc.TRIANGLES, elements.faces.length, gc.UNSIGNED_INT, 0);
 
-
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bufsF.faces);
   g0.setAttrDatabuffers(bufsF, pMain);
   gl.drawElements(gc.TRIANGLES, elementsF.faces.length, gc.UNSIGNED_INT, 0);
@@ -100,6 +106,14 @@ export function frame(state: game.State,
   g0.bindTextures(textures, [pScreenUniform.T0, pScreenUniform.T1, pScreenUniform.Depth]);
   gl.bindFramebuffer(gc.FRAMEBUFFER, null);
   gl.drawArrays(gc.TRIANGLES, 0, 6)
+
+  gl.flush();
+
+  let pixels = new Uint8Array(40);
+  gl.readPixels(1, 1, 1, 1, gc.RGBA, gc.UNSIGNED_BYTE, pixels);
+  if(pixels[0] == 255){
+    console.log("CRASH");
+  }
 
   gl.flush()
 

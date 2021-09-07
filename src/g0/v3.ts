@@ -11,6 +11,7 @@ export const scale = (v: Vec3, n: number) => [v[X] * n, v[Y] * n, v[Z] * n] as V
 export const norm = (v: Vec3, l = 1) => scale(v, l / len(v));
 export const mul = (v: Vec3, w: Vec3) => v[X] * w[X] + v[Y] * w[Y] + v[Z] * w[Z];
 export const sum = (v: Vec3, w: Vec3) => [v[X] + w[X], v[Y] + w[Y], v[Z] + w[Z]] as Vec3;
+export const mulEach = (v: Vec3, w: Vec3) => [v[X] * w[X], v[Y] * w[Y], v[Z] * w[Z]] as Vec3;
 export const sumn = (v: Vec3, n: number) => [v[X] + n, v[Y] + n, v[Z] + n] as Vec3;
 export const sub = (v: Vec3, w: Vec3) => [v[X] - w[X], v[Y] - w[Y], v[Z] - w[Z]] as Vec3;
 export const reflect = (v: Vec3, normal: Vec3) => sum(v, scale(normal, mul(v, normal)))

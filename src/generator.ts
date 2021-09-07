@@ -10,7 +10,7 @@ import { Shape } from "./g0/shape";
 
 const ts = shape.transformShape;
 
-const BUILDING = 2, FLYER = 3, TUNNEL = 4, WARPER = 5, SHIP = 7;
+const BUILDING = 2, FLYER = 3, TUNNEL = 4, WARPER = 5, SHIP = 7, FIXED = 8;
 
 export const cityCols = 72,
   cityRows = 120,
@@ -19,7 +19,7 @@ export const cityCols = 72,
   citySize = cityCols * cityRows,
   cityDepth = cityRows * cityRowGap;
 
-export function putShapesInBuffers(shapes: any, prog: WebGLProgram, conf:any) {
+export function putShapesInBuffers(shapes: any, prog: WebGLProgram, conf: any) {
   let [bufs, elements] = g0.putShapesInElementBuffers(shapes, conf);
 
   g0.setAttrDatabuffers(bufs, prog);
@@ -40,18 +40,23 @@ export function initGeometry() {
 
   for (let i = 0; i < 300; i++) {
     let ship = shipGeometry(rng, i);
-    let sector = i%6;
-    ts(ship, 
-      m4.axisRotation([0,1,0], PIH + (sector<3?PI:0)),
-      m4.scaling(rng(5)+2),
-      m4.translation([0,/*i/300*cityDepth*/0,cityRadius * (0.35 + rng()*0.15)]), 
-      m4.axisRotation([0,1,0], sector*PI2/6 + PI2 * 5/12 + rng()*0.2-0.1)
+    let sector = i % 6;
+    ts(ship,
+      m4.axisRotation([0, 1, 0], PIH + (sector < 3 ? PI : 0)),
+      m4.scaling(rng(5) + 2),
+      m4.translation([0,/*i/300*cityDepth*/0, cityRadius * (0.35 + rng() * 0.15)]),
+      m4.axisRotation([0, 1, 0], sector * PI2 / 6 + PI2 * 5 / 12 + rng() * 0.2 - 0.1)
     );
     world.push(ship);
   }
 
+  let ui = shape.mesh(1, 1, (x, y) => [x*2 - 1, y*0.05 + 0.95, 0]);
+  shape.setType(ui, v => [FIXED, 0, 0, 0])
+  world.push(ui);
+
   calculateAllNormals(world);
   calculateAllNormals([flyer]);
+
 
   return [world, [flyer]];
 }
@@ -81,8 +86,7 @@ function flyerGeometry() {
 
   let flyer = shape.combine([body, wing, engine, engine2])
 
-  for (let v of flyer.verts)
-    v.type = [FLYER, 0, 0, 0];
+  shape.setType(flyer, v => [FLYER, 0, 0, 0]);
 
   ts(flyer,
     m4.scaling(0.2),
@@ -148,8 +152,7 @@ function tunnelGeometry(rng: Rng, divs: number, r1: number, r2: number, h: numbe
     if (v.cell[Y] == 0) v.type = [WARPER, 0, 0, 0];
 
   let combined = shape.combine([warper, ...horns]);
-  for (let v of combined.verts)
-    v.type = v.type || [TUNNEL, 0, 0, 0];
+  shape.setType(combined, v => v.type || [TUNNEL, 0, 0, 0]);
 
   return combined;
 }
@@ -200,7 +203,7 @@ function generateBuildings(rng: Rng) {
   let buildings: Shape[] = [];
   for (let i = 0; i < citySize; i++) {
     let a = (i % cityCols) / cityCols * PI2;
-    let s = Math.sin(a * 6 + PI / 2)*1;
+    let s = Math.sin(a * 6 + PI / 2) * 1;
     let density = Math.min(1.4 - Math.abs(0.5 - i / citySize) * 3, s * 0.5 + 1);
     if (density > rng()) {
       let r = 10 + rng(10);
@@ -295,14 +298,14 @@ function generateBuildingCurve(rng: (v?: number) => number, size: number, r: num
 }
 
 function generateShipPart(rng: Rng, bends: Vec2, bounds: [Vec2, Vec2], curve: Vec2[]) {
-  let sides = [rng()*bounds[Y][0], rng()*bounds[Y][1]];
+  let sides = [rng() * bounds[Y][0], rng() * bounds[Y][1]];
   let x = bounds[0][X];
   let slices: [Vec2[], Vec2[]] = [[[x, sides[X]]], [[x, sides[Y]]]];
   let step = (bounds[X][1] - bounds[X][0]) / (bends[0] + bends[1]);
   if (step < 0)
     return;
   for (let i = 0; i < 20; i++) {
-    x = x + rng()*step;
+    x = x + rng() * step;
     if (x > bounds[X][1])
       x = bounds[X][1]
     if (rng() < bends[0] / (bends[0] + bends[1]))
@@ -322,17 +325,17 @@ function generateShipPart(rng: Rng, bends: Vec2, bounds: [Vec2, Vec2], curve: Ve
   return shape.coveredTowerMesh(slice, curve);
 }
 
-function shipGeometry(rng: Rng, id:number) {
+function shipGeometry(rng: Rng, id: number) {
   let hullLength = 5 + rng(15)
   let hullWidth = 0.5 + rng();
   let hullHeight = 0.5 + rng();
-  let wingWidth = 0.1 + rng()*3;
+  let wingWidth = 0.1 + rng() * 3;
 
   let wing1 = generateShipPart(
     rng,
     [rng(3) + 1, rng(3) + 1],
-    [[0, hullWidth+1+rng(5)],  [-2 - rng()*hullLength/3, 6 + rng()*hullLength/2]], 
-    [[1, 0], [1.5, wingWidth*0.33], [1.5, wingWidth*0.66], [1, wingWidth]]
+    [[0, hullWidth + 1 + rng(5)], [-2 - rng() * hullLength / 3, 6 + rng() * hullLength / 2]],
+    [[1, 0], [1.5, wingWidth * 0.33], [1.5, wingWidth * 0.66], [1, wingWidth]]
   )
   let wing2 = shape.clone(wing1);
   shape.reflect(wing2, [1, 0, 0])
@@ -340,8 +343,8 @@ function shipGeometry(rng: Rng, id:number) {
   let body = generateShipPart(
     rng,
     [rng(3) + 1, rng(3) + 1],
-    [[-3, hullLength], [-4*hullHeight, 4*hullHeight]],
-    [[1, -2*hullWidth], [1.5, -1*hullWidth], [1.5, 1*hullWidth], [1, 2*hullWidth]]
+    [[-3, hullLength], [-4 * hullHeight, 4 * hullHeight]],
+    [[1, -2 * hullWidth], [1.5, -1 * hullWidth], [1.5, 1 * hullWidth], [1, 2 * hullWidth]]
   )
   ts(body, m4.axisRotation([0, 0, -1], PIH), m4.axisRotation([0, 1, 0], PIH));
 

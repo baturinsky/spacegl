@@ -59,7 +59,8 @@ function main() {
         if (playing())
           update(Date.now() - lastTime)
         lastTime = Date.now();
-        requestAnimationFrame(loop)
+        //requestAnimationFrame(()=>{new Promise(r=>r(null)).then(loop)})
+        setTimeout(loop, 1000/60);
       }
       loop();
     }

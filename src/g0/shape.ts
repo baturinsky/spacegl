@@ -107,6 +107,10 @@ export function shapesToElements(shapes: Shape[], attrs: { [id: string]: number[
   return { faces, verts } as Elements;
 }
 
+export function mesha(rows: number, arr:Vec3[]) {
+  return mesh(arr.length/rows, rows, (x:number,y:number)=>arr[x+y*rows])
+}
+
 export function mesh(cols: number, rows: number, shader: (x: number, y: number) => Vec3) {
   let faces: Face[] = new Array(cols * rows * 2), verts: Vert[] = new Array((cols + 1) * (rows + 1));
 
@@ -208,3 +212,7 @@ export function reflect(shape: Shape, norm: Vec3) {
   invert(shape);
 }
 
+export function setType(s:Shape, f:(v:Vert)=>Vec4){
+  for(let v of s.verts)
+    v.type = f(v);
+}

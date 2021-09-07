@@ -25,25 +25,39 @@ float dither(float v, ivec2 F) {
 }
 
 const bool ditherOn = true;
+const float collisionDepth = 0.6;
 
 void main() {
   ivec2 F = ivec2(gl_FragCoord.xy);
   float depth = texelFetch(Depth, F, 0).r;
   color = vec4(1.);
 
-  /*if(distance(vec2(scp0.x, -scp0.y), uv)<0.02){
-    color = vec4(1.,0.,0.,1.);
+  if(F.y < 2) {
+    color = (texelFetch(Depth, ivec2(scp0.xy), 0).r < collisionDepth ||
+      texelFetch(Depth, ivec2(scp1.xy), 0).r < collisionDepth ||
+      texelFetch(Depth, ivec2(scp2.xy), 0).r < collisionDepth) ? vec4(1., 0., 0., 1.) : vec4(0., 0., 0., 1.);
     return;
   }
 
-  if(distance(vec2(scp1.x, -scp1.y), uv)<0.02){
-    color = vec4(0.,1.,0.,1.);
-    return;
+  /*if(distance(vec2(scp0.x, -scp0.y), uv) < 0.01) {
+    if(depth < collisionDepth) {
+      color = vec4(1., 0., 0., 1.);
+      return;
+    }
   }
 
-  if(distance(vec2(scp2.x, -scp2.y), uv)<0.02){
-    color = vec4(0.,0.,1.,1.);
-    return;
+  if(distance(vec2(scp1.x, -scp1.y), uv) < 0.01) {
+    if(depth < collisionDepth) {
+      color = vec4(0., 1., 0., 1.);
+      return;
+    }
+  }
+
+  if(distance(vec2(scp2.x, -scp2.y), uv) < 0.01) {
+    if(depth < collisionDepth) {
+      color = vec4(0., 0., 1., 1.);
+      return;
+    }
   }*/
 
   if(depth == 1.) {
@@ -51,7 +65,7 @@ void main() {
     vec3 pos = (pos4 / pos4.w).xyz - flyer[3].xyz;
     pos = pos / length(pos);
 
-    if(Noise2d(vec2(floor((pos.x+pos.y)*3e2), floor(pos.z*3e2)))>0.99)
+    if(Noise2d(vec2(floor((pos.x + pos.y) * 3e2), floor(pos.z * 3e2))) > 0.99)
       color.xyz = pos * 0.5 + 0.5;
     else
       color.xyz = vec3(0.);
@@ -65,11 +79,13 @@ void main() {
     float diff = 0.;
     for(int i = 0; i < 8; i++) {
       int step = i / 4;
-      float edge = texelFetch(Depth, F + ivec2(i % 2, i % 4 / 2) * step, 0).r + texelFetch(Depth, F - ivec2(i % 2, i % 4 / 2) * step, 0).r - depth * 2.;
+      ivec2 place = ivec2(i % 2, i % 4 / 2) * step;
+      float edge = texelFetch(Depth, F + place, 0).r +
+        texelFetch(Depth, F - place, 0).r - depth * 2.;
       diff += abs(edge);
     }
 
-    if(diff > .00007) {
+    if(diff > .00005) {
       //lut = lit>0.1?0.:1.;
       color.rgb = normalize(color.rgb) * 0.3;
     } else {

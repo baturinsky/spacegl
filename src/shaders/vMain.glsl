@@ -56,7 +56,14 @@ void main() {
     at4.y = at4.y + 5000. - pow(shift*1000.,1.4);
   }
 
-  vec4 pos = camera * at4;
+  vec4 pos;
+  
+  if(vtype.x == 8){
+    pos = at4;
+  } else {
+    pos = camera * at4;
+  }
+
   vat = at4.xyz;
   pos.y = -pos.y;
 

@@ -54,19 +54,22 @@ void main() {
         x < 1. - hm &&
         y > vm &&
         y < 1. - vm &&
-        (cols == 1. || fract((x - hm) / (1. - hm*2.) * cols) > hb) &&
-        (rows ==1. || fract((y - vm) / (1. - vm*2.) * rows) > vb) ? -1. : .0;
+        (cols == 1. || fract((x - hm) / (1. - hm * 2.) * cols) > hb) &&
+        (rows == 1. || fract((y - vm) / (1. - vm * 2.) * rows) > vb) ? -1. : .0;
     }
 
-    
-
-    float l = clamp((dist-500.)/200., 0., 1.);
+    float l = clamp((dist - 500.) / 200., 0., 1.);
     bright += mix(near, far, l);
 
   } else if(itype == 4) {
     bright += vat.z * 5e-4 + (fract(vat.y / 20. + 0.55) < .1 || fract(atan(vat.x, vat.z) / 3.141 * 70.) < .1 ? -1. : 0.);
   } else if(itype == 5) {
     bright = 2.;
+  }
+
+  if(itype == 7) {
+    float y = fract(vcell.y);
+    bright += y < 0.03 || y > 0.97 || y>0.49 && y<0.51/* || mod(vcell.x,3. + sin(floor(vcell.y)*100.)) < 0.03*/? -.5 : .0;
   }
 
   if(bright > 0.)

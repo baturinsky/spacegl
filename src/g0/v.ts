@@ -13,7 +13,7 @@ export const dist = <T extends Vec>(v: T, w: T) => len(sub(v,w));
 export const scale = <T extends Vec>(v: T, n: number) => v.map(x => x * n) as T;
 export const norm = <T extends Vec>(v: T, l = 1) => scale(v, l / len(v)) as T;
 export const mul = (v: Vec, w: Vec) => v.reduce((s, x, i) => s + x * w[i], 0);
-export const muleach = <T extends Vec>(v: Vec, w: Vec) => v.map((x, i) => x * w[i]) as T;
+export const mulEach = <T extends Vec>(v: Vec, w: Vec) => v.map((x, i) => x * w[i]) as T;
 export const sum = <T extends Vec>(v: T, w: T) => v.map((x, i) => x + w[i]) as T;
 export const sum2 = <T extends Vec>(v: T, w: T, n:number) => v.map((x, i) => x + w[i]*n) as T;
 export const sub = <T extends Vec>(v: T, w: T) => v.map((x, i) => x - w[i]) as T;
