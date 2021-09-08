@@ -1,6 +1,6 @@
 //@ts-check
 
-import { X, Y, Z } from "./misc"
+import { Rng, X, Y, Z } from "./misc"
 
 export type Vec3 = [number, number, number];
 
@@ -17,6 +17,7 @@ export const sumvn = (v: Vec3, w: Vec3, n: number) => [v[X] + w[X] * n, v[Y] + w
 export const sub = (v: Vec3, w: Vec3) => [v[X] - w[X], v[Y] - w[Y], v[Z] - w[Z]] as Vec3;
 export const reflect = (v: Vec3, normal: Vec3) => sum(v, scale(normal, mul(v, normal)))
 export const cross = (a: Vec3, b: Vec3) => [a[Y] * b[Z] - a[Z] * b[Y], a[Z] * b[X] - a[X] * b[Z], a[X] * b[Y] - a[Y] * b[X]] as Vec3;
+export const random = (rng:Rng) => [rng(),rng(),rng()] as Vec3;
 
 export const lerp = (v: Vec3, w: Vec3, n: number) => [
   v[X] * (1 - n) + w[X] * n,

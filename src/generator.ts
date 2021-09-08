@@ -10,7 +10,7 @@ import { Shape } from "./g0/shape";
 
 const ts = shape.transformShape;
 
-const BUILDING = 2, FLYER = 3, TUNNEL = 4, WARPER = 5, SHIP = 7, FIXED = 8;
+const BUILDING = 2, FLYER = 3, TUNNEL = 4, WARPER = 5, SHIP = 7, FIXED = 8, DEBRIS = 9, AD = 10;
 
 export const cityCols = 72,
   cityRows = 180,
@@ -31,10 +31,12 @@ export function initGeometry() {
 
   let rng = RNG(1);
 
-  let world = generateCity(rng);
+  let solid = generateCity(rng);
   //let world: Shape[] = [];
 
+  let passable: Shape[] = [];
   let flyer = flyerGeometry();
+  passable.push(flyer);
 
   //world.push(flyer);
 
@@ -47,18 +49,33 @@ export function initGeometry() {
       m4.translation([0,/*i/300*cityDepth*/0, cityRadius * (0.35 + rng() * 0.15)]),
       m4.axisRotation([0, 1, 0], sector * PI2 / 6 + PI2 * 5 / 12 + rng() * 0.2 - 0.1)
     );
-    world.push(ship);
+    solid.push(ship);
   }
 
-  let ui = shape.mesh(1, 1, (x, y) => [x * 2 - 1, y * 0.05 + 0.95, 0]);
+  /*let ui = shape.mesh(1, 1, (x, y) => [x * 2 - 1, y * 0.05 + 0.95, 0]);
   shape.setType(ui, v => [FIXED, 0, 0, 0])
-  world.push(ui);
+  world.push(ui);*/
 
-  calculateAllNormals(world);
-  calculateAllNormals([flyer]);
+  for (let d = 0; d < 100; d++) {
+    let pos = v3.scale(v3.random(rng), 100);
+    for (let i = 0; i < 20; i++) {
+      let size = rng()*3 + 1;
+      let triangle = shape.triangle(shape.vertsAt([[-size / 2, -size / 2, 0], [-size / 2, size, 0], [size / 2, -size / 2, 0]]))
+      shape.setType(triangle, () => [DEBRIS, ...pos])
+      passable.push(triangle);
+    }
+  }
 
+  let i = 0;
+  for (let s of [...solid, ...passable]) {
+    i++;
+    shape.calculateFlatNormals(s);
+    for (let v of s.verts) {
+      v.shape = i;
+    }
+  }
 
-  return [world, [flyer]];
+  return [solid, passable];
 }
 
 function flyerGeometry() {
@@ -184,7 +201,7 @@ function roundTower2(rng: Rng, r: number, i: number, height: number) {
   let simple = rng(4);
 
   if (simple) {
-    [curve, types] = generateBuildingCurve(rng, height/2, r * (0.5 + rng()*0.4), true);
+    [curve, types] = generateBuildingCurve(rng, height / 2, r * (0.5 + rng() * 0.4), true);
     slice = [[1, 1], [-1, 1], [-1, -1], [1, -1]];
   } else {
     let sectors = rng(4) + 4;
@@ -201,7 +218,6 @@ function roundTower2(rng: Rng, r: number, i: number, height: number) {
   let building = shape.twoCurvesMesh(slice, curve, shape.towerShader);
   for (let v of building.verts) {
     v.type = types ? types[v.cell[Y]] : [2, 0, 0, 0];
-    v.shape = i;
   }
   return building;
 }
@@ -217,7 +233,7 @@ function generateBuildings(rng: Rng) {
       if (!rng(10) && s > 0)
         r *= 1.2;
       r = Math.min(18, r);
-      let building = roundTower2(rng, r * (0.5+rng()*0.5), i, density * 20 / r * (8 + rng(10)));
+      let building = roundTower2(rng, r * (0.5 + rng() * 0.5), i, density * 20 / r * (8 + rng(10)));
       buildings[i] = building;
     }
   }
@@ -278,7 +294,7 @@ function generateBuildingCurve(rng: Rng, height: number, r: number, simple = fal
     let dx = w > 1 ? 0 : x * (0.1 + rng() * 0.5) * (rng(4) ? -1 : 1);
     if (x + dx > 1 || x + dx < 0.3)
       dx = -dx;
-    let dy = simple ? height : (w>0?1:0) * (rng() * (height*1.1-y));
+    let dy = simple ? height : (w > 0 ? 1 : 0) * (rng() * 0.5 * (height * 1.1 - y));
     if (y < 5 && dy > 0)
       dy++;
     x += dx;

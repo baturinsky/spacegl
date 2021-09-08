@@ -83,5 +83,7 @@ void main() {
   //c1 = vec4(vat / 1000. + 0.5, 1.);
   //c1 = vec4(1.,0.,0.,1.);
   //if(pass == 0.)
-  c1 = vec4(gl_FragCoord.xyz * gl_FragCoord.w, 1.);
+  //c1 = vec4(gl_FragCoord.xyz * gl_FragCoord.w, 1.);
+  //c1 = vec4(vnorm, 1.);
+  c1 = vec4(vnorm*0.5+0.5, gl_FragCoord.z * gl_FragCoord.w);
 }

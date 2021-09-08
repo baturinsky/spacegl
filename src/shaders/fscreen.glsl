@@ -105,7 +105,6 @@ void main() {
     }
   }
 
-  //color = (color + 0.5) * texelFetch(T1, F, 0);
-
+  //color = texelFetch(T1, F, 0);
   color.a = 1.;
 }

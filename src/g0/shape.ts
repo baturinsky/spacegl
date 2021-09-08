@@ -107,8 +107,8 @@ export function shapesToElements(shapes: Shape[], attrs: { [id: string]: number[
   return { faces, verts } as Elements;
 }
 
-export function mesha(rows: number, arr:Vec3[]) {
-  return mesh(arr.length/rows, rows, (x:number,y:number)=>arr[x+y*rows])
+export function mesha(rows: number, arr: Vec3[]) {
+  return mesh(arr.length / rows, rows, (x: number, y: number) => arr[x + y * rows])
 }
 
 export function mesh(cols: number, rows: number, shader: (x: number, y: number) => Vec3) {
@@ -204,7 +204,7 @@ export function clone(shape: Shape) {
 }
 
 export function invert(shape: Shape) {
-  shape.faces = shape.faces.map(f => [f[1],f[0],f[2]]);
+  shape.faces = shape.faces.map(f => [f[1], f[0], f[2]]);
 }
 
 export function reflect(shape: Shape, norm: Vec3) {
@@ -212,7 +212,19 @@ export function reflect(shape: Shape, norm: Vec3) {
   invert(shape);
 }
 
-export function setType(s:Shape, f:(v:Vert)=>Vec4){
-  for(let v of s.verts)
+export function setType(s: Shape, f: (v: Vert) => Vec4) {
+  for (let v of s.verts)
     v.type = f(v);
+}
+
+export function triangle(verts: Vert[]) {
+  return { faces: [verts], verts } as Shape;
+}
+
+export function quad(verts: Vert[]) {
+  return { faces: [verts.slice(1, 3), [verts[0], verts[1], verts[3]]], verts } as Shape;
+}
+
+export function vertsAt(coords:Vec3[]){
+  return coords.map((at,ind) => ({ind, at})) as Vert[];
 }

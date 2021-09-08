@@ -48,7 +48,7 @@ export function init() {
 
 export function update(dTime: number) {
 
-  state.time++;
+  state.time += dTime;
 
   let velDelta = ((keyPressed[0] ? 1 : 0) + (keyPressed[2] ? -1 : 0)) * dTime * 0.0003;
 
@@ -97,29 +97,20 @@ export function update(dTime: number) {
   let delta = v3.scale(state.dir, state.vel * dTime);
   state.at = v3.sum(state.at, delta);
 
-
   const checkCollisions = true;
 
   if (checkCollisions) {
-    if (crashPixel[0][2]>10) {
-      state.at = v3.sumvn(state.at, right, state.vel * 10)
-      state.at = v3.sumvn(state.at, back, state.vel * 10)
-      if (state.vel > -0.1)
-        state.vel -= 0.005;
-      //console.log("R");
-    }
-    if (crashPixel[1][2]>10) {
-      state.at = v3.sumvn(state.at, left, state.vel * 10)
-      state.at = v3.sumvn(state.at, back, state.vel * 10)
-      if (state.vel > -0.1)
-        state.vel -= 0.005;
-      //console.log("L");
-    }
-    if (crashPixel[2][2]>10) {
-      state.at = v3.sumvn(state.at, back, state.vel * 100)
-      if (state.vel > -0.1)
-        state.vel -= 0.03;
-      //console.log("B");
+    for(let crashPoint in [0,1,2]){
+      let proximity = crashPixel[crashPoint][3];
+      if (proximity>10) {
+        
+        let raw = [...crashPixel[crashPoint].slice(0,3)] as Vec3;
+        let norm = v3.norm(v3.sumn(raw, -128));
+        let crashAngle = -v3.mul(norm,state.dir);
+        state.at = v3.sumvn(state.at, norm, state.vel * crashAngle * proximity / 2)
+        if (state.vel > -0.1)
+          state.vel *= 1 - crashAngle*0.01;
+      }  
     }
   }
 
@@ -142,3 +133,19 @@ export function initControls() {
     }
   }))
 }
+
+/*
+    if (crashPixel[1][3]>10) {
+      state.at = v3.sumvn(state.at, left, state.vel * 10)
+      state.at = v3.sumvn(state.at, back, state.vel * 10)
+      if (state.vel > -0.1)
+        state.vel -= 0.005;
+      //console.log("L");
+    }
+    if (crashPixel[2][3]>10) {
+      state.at = v3.sumvn(state.at, back, state.vel * 100)
+      if (state.vel > -0.1)
+        state.vel -= 0.03;
+      //console.log("B");
+    }
+*/

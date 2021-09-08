@@ -45,7 +45,7 @@ const crashPoints: Vec3[] = [[-1, 1, -1], [1, 1, -1], [0, 1, -1]];
 export function frame(state: game.State,
   [bufs, elements]: [g0.ShapeBuffers, Elements],
   [bufsF, elementsF]: [g0.ShapeBuffers, Elements]) {
-  I.innerHTML = `LMB click to speed up, RMB to speed down. ${state.at.map(v => ~~v)} | ${crashPixel[0][2]};${crashPixel[1][2]};${crashPixel[2][2]}`;
+  I.innerHTML = `LMB click to speed up, RMB to speed down. ${state.at.map(v => ~~v)} | ${crashPixel[0]};${crashPixel[1]};${crashPixel[2]}`;
 
   let time = state.time;
   let [camera, perspective, look] = m4.viewMatrices(
@@ -54,12 +54,10 @@ export function frame(state: game.State,
     viewSize,
     PI / 4,
     [4, cityDepth + dist(state.at, [0, cityDepth * 0.5, 0])]
+    //[4, 5000]
   );
   let invCamera = m4.inverse(camera);
 
-
-  //let flyer = m4.lookTo(state.pos, state.dir);
-  //fdir[Z] = 0;
   let flyer = m4.lookTo(state.at, state.dir, [0, 0, 1]);
   flyer = m4.multiply(flyer, m4.axisRotation([0, 0, 1], -(state.smoothDrot[X]) * Math.PI / 4 / 100));
   flyer = m4.multiply(flyer, m4.axisRotation([1, 0, 0], -(state.smoothDrot[Y]) * Math.PI / 4 / 200));
@@ -112,7 +110,6 @@ export function frame(state: game.State,
   gl.drawArrays(gc.TRIANGLES, 0, 6)
 
   //console.log(`Rendered in ${Date.now() - startTime} ms`);
-
 }
 
 export let crashPixel = rangef(4, _ => new Uint8Array(4));

@@ -20,6 +20,25 @@ flat out vec4 vcolor;
 flat out ivec4 vtype;
 flat out int vshape;
 
+float rand(float n){return fract(sin(n) * 43758.5453123);}
+
+mat4 axisRotation(vec3 axis, float angle) {
+
+  float x = axis.x;
+  float y = axis.y;
+  float z = axis.z;
+
+  float n = sqrt(x * x + y * y + z * z);
+  x /= n;
+  y /= n;
+  z /= n;
+  float c = cos(angle);
+  float s = sin(angle);
+  float omc = 1. - c;
+
+  return mat4(x * x + (1. - x * x) * c, x * y * omc + z * s, x * z * omc - y * s, 0., x * y * omc - z * s, y * y + (1. - y * y) * c, y * z * omc + x * s, 0., x * z * omc + y * s, y * z * omc - x * s, z * z + (1. - z * z) * c, 0., 0., 0., 0., 1.);
+}
+
 void main() {
   vat = at;
   vnorm = norm;
@@ -29,6 +48,16 @@ void main() {
   vshape = int(shape);
 
   vec4 at4 = vec4(at, 1.);
+
+  if(vtype.x == 9) {
+    float a = rand(shape);
+    vec3 axis = normalize(vec3(rand(a+1.), rand(a+2.), rand(a+3.)));
+    //vec3 axis = vec3(1.,0.,0.);   
+    light -= a*0.3; 
+    at4 = axisRotation(axis, time * 5e-3 * (.5+rand(a+4.)) + rand(a+4.) ) * at4;
+    at4.xyz += 10. * (vec3(rand(a+5.), rand(a+6.), rand(a+7.)) - .5);
+    at4.xyz += vec3(vtype.yzw);
+  }
 
   //int si = int(shape);
 
@@ -52,13 +81,13 @@ void main() {
       vnorm.y = -vnorm.y;
       at4.y = -at4.y;
     }
-    float shift = fract(fract(float(id) / 2e2) + time * (id % 2 == 1 ? 3. : -3.)*3e-5);
-    at4.y = at4.y + 5000. - pow(shift*200.,2.);
+    float shift = fract(fract(float(id) / 1e2) + time * 1e-5 * (id % 2 == 1 ? 3. : -3.));
+    at4.y = at4.y + 7300. - pow(shift * 120., 2.);
   }
 
   vec4 pos;
-  
-  if(vtype.x == 8){
+
+  if(vtype.x == 8) {
     pos = at4;
   } else {
     pos = camera * at4;
