@@ -44,3 +44,7 @@ export function hex2Digit(n: number, place: number) {
 export function hexFromDigits(n:number[]){
   return n.reduce((t,v)=>t*16+v)
 }
+
+export function lastOf<T>(arr:T[]){
+  return arr[arr.length-1];
+}

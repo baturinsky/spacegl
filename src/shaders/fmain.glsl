@@ -63,7 +63,7 @@ void main() {
     bright += mix(near, far, l);
 
   } else if(itype == 4) {
-    bright += vat.z * 5e-4 + (fract(vat.y / 20. + 0.55) < .1 || fract(atan(vat.x, vat.z) / 3.141 * 70.) < .1 ? -1. : 0.);
+    bright += vat.z * 5e-4 + (fract(vat.y / 40. + 0.55) < .1 || fract(atan(vat.x, vat.z) / 3.141 * 36. + 0.45) < .1 ? -1. : 0.);
   } else if(itype == 5) {
     bright = 2.;
   }

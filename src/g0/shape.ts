@@ -25,9 +25,9 @@ export function calculateFlatNormals(s: Shape) {
 }
 
 export const transformShape = (shape: Shape, ...mats: m4.Mat[]) => {
-  for (let mat of mats)
-    for (let vert of shape.verts)
-      vert.at = m4.transform(mat, vert.at);
+  let combined = m4.combine(...mats);
+  for (let vert of shape.verts)
+    vert.at = m4.transform(combined, vert.at);    
 }
 
 export function reindexVerts(shape: Shape) {
@@ -133,8 +133,8 @@ export function mesh(cols: number, rows: number, shader: (x: number, y: number) 
 export const arrToFunc = <T>(arr: T[]) => (n: number) => arr[n]
 export const funcToArr = <T>(f: (n: number) => T, l: number) => range(l).map(i => f(i))
 
-export const revolutionShader = (sectors: number) =>
-  (x: number) => angle2d(PI2 / sectors * x);
+export const revolutionShader = (sectors: number, angle: number = 0) =>
+  (x: number) => angle2d(PI2 / sectors * x + angle);
 
 export const starShader = (sectors: number, r2: number) =>
   (x: number) => angle2d(PI2 / sectors * x).map(c => c * (x % 2 ? 1 : r2));
@@ -222,9 +222,9 @@ export function triangle(verts: Vert[]) {
 }
 
 export function quad(verts: Vert[]) {
-  return { faces: [verts.slice(1, 3), [verts[0], verts[1], verts[3]]], verts } as Shape;
+  return { faces: [[verts[1], verts[2], verts[3]], [verts[0], verts[1], verts[3]]], verts } as Shape;
 }
 
-export function vertsAt(coords:Vec3[]){
-  return coords.map((at,ind) => ({ind, at})) as Vert[];
+export function vertsAt(coords: Vec3[]) {
+  return coords.map((at, ind) => ({ ind, at })) as Vert[];
 }

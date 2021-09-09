@@ -4,7 +4,7 @@ import * as m4 from "./g0/m4"
 import * as shape from "./g0/shape"
 import * as gc from "./g0/glconst";
 import * as g0 from "./g0/gl";
-import { range, rangef, PI, PI2, PIH, RNG, X, Y, Z, hexFromDigits, Rng } from "./g0/misc";
+import { range, rangef, PI, PI2, PIH, RNG, X, Y, Z, hexFromDigits, Rng, PIQ, lastOf } from "./g0/misc";
 import { Vec2, Vec4 } from "./g0/v";
 import { Shape } from "./g0/shape";
 
@@ -12,12 +12,15 @@ const ts = shape.transformShape;
 
 const BUILDING = 2, FLYER = 3, TUNNEL = 4, WARPER = 5, SHIP = 7, FIXED = 8, DEBRIS = 9, AD = 10;
 
+type Building = Shape & { height: number, extend: Vec2 }
+
 export const cityCols = 72,
   cityRows = 180,
   cityRadius = 400,
   cityRowGap = 40,
   citySize = cityCols * cityRows,
-  cityDepth = cityRows * cityRowGap;
+  cityDepth = cityRows * cityRowGap,
+  cityColGap = cityRadius * PI2 / cityCols;
 
 export function putShapesInBuffers(shapes: any, prog: WebGLProgram, conf: any) {
   let [bufs, elements] = g0.putShapesInElementBuffers(shapes, conf);
@@ -31,7 +34,10 @@ export function initGeometry() {
 
   let rng = RNG(1);
 
-  let solid = generateCity(rng);
+  let buildings = generateCity(rng);
+
+  let solid:Shape[] = buildings.slice();
+
   //let world: Shape[] = [];
 
   let passable: Shape[] = [];
@@ -56,13 +62,20 @@ export function initGeometry() {
   shape.setType(ui, v => [FIXED, 0, 0, 0])
   world.push(ui);*/
 
-  for (let d = 0; d < 100; d++) {
-    let pos = v3.scale(v3.random(rng), 100);
+  for (let d = 0; d < buildings.length; d++) {
+    //let pos = v3.scale(v3.random(rng), 100);
+    //let pos = lastOf(buildings[rng(buildings.length)].verts).at;
+    let pos = lastOf(buildings[d].verts).at;
     for (let i = 0; i < 20; i++) {
-      let size = rng()*3 + 1;
-      let triangle = shape.triangle(shape.vertsAt([[-size / 2, -size / 2, 0], [-size / 2, size, 0], [size / 2, -size / 2, 0]]))
-      shape.setType(triangle, () => [DEBRIS, ...pos])
-      passable.push(triangle);
+      let size = rng() * 3 + 1;
+      let junk = shape.quad(shape.vertsAt([
+        [-size / 2, -size / 2, 0], 
+        [-size / 2, size, 0], 
+        [size / 2, size / 2, 0],
+        [size / 2, -size / 2, 0],
+      ]))
+      shape.setType(junk, () => [DEBRIS, ...pos])
+      passable.push(junk);
     }
   }
 
@@ -123,12 +136,12 @@ function flyerGeometry() {
 }
 
 function generateCity(rng: Rng) {
-  let shapes: shape.Shape[] = []
+  let shapes: shape.Shape[] = [];
 
   //console.log(generateShipPart());
 
   let buildings = generateBuildings(rng);
-  tunnelCity(buildings, rng);
+  tunnelCity(buildings);
   buildings.forEach(b => b && shapes.push(b));
 
   let tunnel = tunnelGeometry(rng, 72, cityRadius, cityRadius * 1.3, cityRows * cityRowGap);
@@ -206,7 +219,7 @@ function roundTower2(rng: Rng, r: number, i: number, height: number) {
   } else {
     let sectors = rng(4) + 4;
     [curve, types] = generateBuildingCurve(rng, height, r);
-    slice = rangef(sectors, a => shape.revolutionShader(sectors)(a));
+    slice = rangef(sectors, a => shape.revolutionShader(sectors, PIQ)(a));
 
     if (!rng(3))
       slice = shape.smoothPoly(slice, 0.1);
@@ -219,38 +232,66 @@ function roundTower2(rng: Rng, r: number, i: number, height: number) {
   for (let v of building.verts) {
     v.type = types ? types[v.cell[Y]] : [2, 0, 0, 0];
   }
+
   return building;
 }
 
 function generateBuildings(rng: Rng) {
-  let buildings: Shape[] = [];
+  let buildings: Building[] = new Array(citySize), heights: number[] = new Array(citySize);
+
   for (let i = 0; i < citySize; i++) {
+    if (heights[i])
+      continue;
+    let extend = [(rng(4) ? 0 : rng(3)), (rng(4) ? 0 : rng(3))] as Vec2;
     let a = (i % cityCols) / cityCols * PI2;
     let s = Math.sin(a * 6 + PI / 2);
     let density = Math.min(1.4 - Math.abs(0.5 - i / citySize) * 3, s * 0.5 + 1);
-    if (density > rng() * 0.5) {
-      let r = (10 + rng(5)) * (1 + density);
+    let h = 0;
+    if (density > rng() * 0.3) {
+      let r = 30 + rng(10);
       if (!rng(10) && s > 0)
         r *= 1.2;
       r = Math.min(18, r);
-      let building = roundTower2(rng, r * (0.5 + rng() * 0.5), i, density * 20 / r * (8 + rng(10)));
+      h = density * 20 * (8 + rng(10));
+      let building = roundTower2(rng, r * (0.5 + rng() * 0.5), i, h / r) as Building;
+      r *= 1 - (0.1 + extend[X] + extend[Y]);
       buildings[i] = building;
+      heights[i] = h;
+      building.extend = extend;
+      building.height = h;
+      if (extend[X] > 1 || extend[Y] > 1) {
+        for (let x = 0; x <= extend[X]; x++)
+          for (let y = 0; y <= extend[Y]; y++)
+            heights[i + x + y * cityCols] = h;
+      }
+      building.verts.push({at:[0,0, h+5] as v3.Vec3, ind:building.verts.length});
     }
   }
   return buildings;
 }
 
-function tunnelCity(shapes: Shape[], rng: Rng) {
+function tunnelCity(buildings: Building[]) {
+  let pois:any[] = [];
+
   for (let i = 0; i < citySize; i++) {
-    if (!shapes[i])
+    let b = buildings[i];
+    if (!b)
       continue;
-    let a = (i % cityCols) / cityCols * PI2;
-    ts(shapes[i],
+    let a = (i % cityCols) / cityCols * PI2 + b.extend[X] / 2;
+
+    let matrix = m4.multiply
+
+    if (b.extend[X] > 1 || b.extend[Y] > 1)
+      ts(b, m4.scalingv([b.extend[X] + 1, b.extend[Y] + 1, 1]),);
+
+    ts(b,
       //m4.axisRotation(v3.axis[Z], rng() * PI2),
-      m4.translation([0, i / citySize * cityDepth, -cityRadius]),
+      m4.translation([0, (i / citySize * cityDepth) + cityRowGap * b.extend[Y] / 2, -cityRadius]),
       m4.axisRotation(v3.axis[Y], a)
     );
   }
+
+  return pois;
 }
 
 function inceptionCity(shapes: Shape[], rng: Rng) {

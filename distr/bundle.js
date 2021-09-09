@@ -30,6 +30,9 @@
   function hexFromDigits(n) {
     return n.reduce((t, v4) => t * 16 + v4);
   }
+  function lastOf(arr) {
+    return arr[arr.length - 1];
+  }
 
   // src/g0/v3.ts
   var axis = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
@@ -42,7 +45,6 @@
   var sumvn = (v4, w, n) => [v4[X] + w[X] * n, v4[Y] + w[Y] * n, v4[Z] + w[Z] * n];
   var sub = (v4, w) => [v4[X] - w[X], v4[Y] - w[Y], v4[Z] - w[Z]];
   var cross = (a, b) => [a[Y] * b[Z] - a[Z] * b[Y], a[Z] * b[X] - a[X] * b[Z], a[X] * b[Y] - a[Y] * b[X]];
-  var random = (rng2) => [rng2(), rng2(), rng2()];
 
   // src/g0/v.ts
   var len2 = (v4) => mul2(v4, v4) ** 0.5;
@@ -62,6 +64,7 @@
     let col = n % 4, row4 = n - col;
     return b[row4] * a[col] + b[row4 + 1] * a[col + 4] + b[row4 + 2] * a[col + 8] + b[row4 + 3] * a[col + 12];
   });
+  var combine = (...m) => m.length == 1 ? m[0] : combine(...m.slice(0, m.length - 2), multiply(m[m.length - 1], m[m.length - 2]));
   var sum3 = (a, b) => a.map((x, i) => x + b[i]);
   var scale3 = (m, n) => m.map((x) => n * x);
   var trace = (a) => a[0] + a[5] + a[10] + a[15];
@@ -171,6 +174,7 @@
     ];
   }
   var scaling = (n) => range(16).map((i) => i == 15 ? 1 : i % 5 ? 0 : n);
+  var scalingv = (v4) => range(16).map((i) => i == 15 ? 1 : i % 5 ? 0 : v4[i / 5]);
   var translation = (v4) => [
     1,
     0,
@@ -262,15 +266,15 @@
     }
   }
   var transformShape = (shape3, ...mats) => {
-    for (let mat of mats)
-      for (let vert of shape3.verts)
-        vert.at = transform(mat, vert.at);
+    let combined = combine(...mats);
+    for (let vert of shape3.verts)
+      vert.at = transform(combined, vert.at);
   };
   function reindexVerts(shape3) {
     shape3.verts.forEach((v4, i) => v4.ind = i);
     return shape3;
   }
-  function combine(shapes) {
+  function combine2(shapes) {
     return reindexVerts({faces: flat(shapes.map((s) => s.faces)), verts: flat(shapes.map((s) => s.verts))});
   }
   function addUp(arr) {
@@ -349,7 +353,7 @@
       }
     return {faces, verts};
   }
-  var revolutionShader = (sectors) => (x) => angle2d(PI2 / sectors * x);
+  var revolutionShader = (sectors, angle = 0) => (x) => angle2d(PI2 / sectors * x + angle);
   var towerShader = (slice, curve) => (x, y) => {
     return [
       slice[x % slice.length][X] * curve[y][X],
@@ -365,7 +369,7 @@
     let side2 = side(top);
     invert(side1);
     let part = towerMesh(slice, curve);
-    return combine([part, side1, side2]);
+    return combine2([part, side1, side2]);
   };
   var twoCurvesMesh = (slice, curve, shader2) => mesh(slice.length, curve.length - 1, shader2(slice, curve));
   var smoothPoly = (curve, gap) => flat(curve.map((v4, i) => {
@@ -396,8 +400,8 @@
     for (let v4 of s.verts)
       v4.type = f(v4);
   }
-  function triangle(verts) {
-    return {faces: [verts], verts};
+  function quad(verts) {
+    return {faces: [[verts[1], verts[2], verts[3]], [verts[0], verts[1], verts[3]]], verts};
   }
   function vertsAt(coords) {
     return coords.map((at, ind) => ({ind, at}));
@@ -575,9 +579,11 @@ ${body}`;
   var cityRowGap = 40;
   var citySize = cityCols * cityRows;
   var cityDepth = cityRows * cityRowGap;
+  var cityColGap = cityRadius * PI2 / cityCols;
   function initGeometry() {
     let rng2 = RNG(1);
-    let solid = generateCity(rng2);
+    let buildings = generateCity(rng2);
+    let solid = buildings.slice();
     let passable = [];
     let flyer = flyerGeometry();
     passable.push(flyer);
@@ -587,13 +593,18 @@ ${body}`;
       ts(ship, axisRotation([0, 1, 0], PIH + (sector < 3 ? PI : 0)), scaling(rng2(5) + 2), translation([0, 0, cityRadius * (0.35 + rng2() * 0.15)]), axisRotation([0, 1, 0], sector * PI2 / 6 + PI2 * 5 / 12 + rng2() * 0.2 - 0.1));
       solid.push(ship);
     }
-    for (let d = 0; d < 100; d++) {
-      let pos = scale(random(rng2), 100);
+    for (let d = 0; d < buildings.length; d++) {
+      let pos = lastOf(buildings[d].verts).at;
       for (let i2 = 0; i2 < 20; i2++) {
         let size = rng2() * 3 + 1;
-        let triangle2 = triangle(vertsAt([[-size / 2, -size / 2, 0], [-size / 2, size, 0], [size / 2, -size / 2, 0]]));
-        setType(triangle2, () => [DEBRIS, ...pos]);
-        passable.push(triangle2);
+        let junk = quad(vertsAt([
+          [-size / 2, -size / 2, 0],
+          [-size / 2, size, 0],
+          [size / 2, size / 2, 0],
+          [size / 2, -size / 2, 0]
+        ]));
+        setType(junk, () => [DEBRIS, ...pos]);
+        passable.push(junk);
       }
     }
     let i = 0;
@@ -616,7 +627,7 @@ ${body}`;
     invert(engine2);
     let body = towerMesh(smoothPolyFixed([[1, -4], [1, 7], [0, 10], [-1, 7], [-1, -4]], 1), [[0, 1], [0.8, 1], [1, 2], [1, 3], [0.4, 4], [0, 4]]);
     ts(body, translation([0, 2, 3.5]));
-    let flyer = combine([body, wing, engine, engine2]);
+    let flyer = combine2([body, wing, engine, engine2]);
     setType(flyer, (v4) => [FLYER, 0, 0, 0]);
     ts(flyer, scaling(0.2), axisRotation([0, -1, 0], Math.PI), axisRotation([-1, 0, 0], Math.PI / 2), translation([0, 2, 0]));
     return flyer;
@@ -624,7 +635,7 @@ ${body}`;
   function generateCity(rng2) {
     let shapes = [];
     let buildings = generateBuildings(rng2);
-    tunnelCity(buildings, rng2);
+    tunnelCity(buildings);
     buildings.forEach((b) => b && shapes.push(b));
     let tunnel = tunnelGeometry(rng2, 72, cityRadius, cityRadius * 1.3, cityRows * cityRowGap);
     ts(tunnel, axisRotation(axis[X], -Math.PI / 2));
@@ -649,7 +660,7 @@ ${body}`;
     for (let v4 of warper.verts)
       if (v4.cell[Y] == 0)
         v4.type = [WARPER, 0, 0, 0];
-    let combined = combine([warper, ...horns]);
+    let combined = combine2([warper, ...horns]);
     setType(combined, (v4) => v4.type || [TUNNEL, 0, 0, 0]);
     return combined;
   }
@@ -662,7 +673,7 @@ ${body}`;
     } else {
       let sectors = rng2(4) + 4;
       [curve, types] = generateBuildingCurve(rng2, height, r);
-      slice = rangef(sectors, (a) => revolutionShader(sectors)(a));
+      slice = rangef(sectors, (a) => revolutionShader(sectors, PIQ)(a));
       if (!rng2(3))
         slice = smoothPoly(slice, 0.1);
       if (rng2(4) == 0)
@@ -675,29 +686,50 @@ ${body}`;
     return building;
   }
   function generateBuildings(rng2) {
-    let buildings = [];
+    let buildings = new Array(citySize), heights = new Array(citySize);
     for (let i = 0; i < citySize; i++) {
+      if (heights[i])
+        continue;
+      let extend = [rng2(4) ? 0 : rng2(3), rng2(4) ? 0 : rng2(3)];
       let a = i % cityCols / cityCols * PI2;
       let s = Math.sin(a * 6 + PI / 2);
       let density = Math.min(1.4 - Math.abs(0.5 - i / citySize) * 3, s * 0.5 + 1);
-      if (density > rng2() * 0.5) {
-        let r = (10 + rng2(5)) * (1 + density);
+      let h = 0;
+      if (density > rng2() * 0.3) {
+        let r = 30 + rng2(10);
         if (!rng2(10) && s > 0)
           r *= 1.2;
         r = Math.min(18, r);
-        let building = roundTower2(rng2, r * (0.5 + rng2() * 0.5), i, density * 20 / r * (8 + rng2(10)));
+        h = density * 20 * (8 + rng2(10));
+        let building = roundTower2(rng2, r * (0.5 + rng2() * 0.5), i, h / r);
+        r *= 1 - (0.1 + extend[X] + extend[Y]);
         buildings[i] = building;
+        heights[i] = h;
+        building.extend = extend;
+        building.height = h;
+        if (extend[X] > 1 || extend[Y] > 1) {
+          for (let x = 0; x <= extend[X]; x++)
+            for (let y = 0; y <= extend[Y]; y++)
+              heights[i + x + y * cityCols] = h;
+        }
+        building.verts.push({at: [0, 0, h + 5], ind: building.verts.length});
       }
     }
     return buildings;
   }
-  function tunnelCity(shapes, rng2) {
+  function tunnelCity(buildings) {
+    let pois = [];
     for (let i = 0; i < citySize; i++) {
-      if (!shapes[i])
+      let b = buildings[i];
+      if (!b)
         continue;
-      let a = i % cityCols / cityCols * PI2;
-      ts(shapes[i], translation([0, i / citySize * cityDepth, -cityRadius]), axisRotation(axis[Y], a));
+      let a = i % cityCols / cityCols * PI2 + b.extend[X] / 2;
+      let matrix = multiply;
+      if (b.extend[X] > 1 || b.extend[Y] > 1)
+        ts(b, scalingv([b.extend[X] + 1, b.extend[Y] + 1, 1]));
+      ts(b, translation([0, i / citySize * cityDepth + cityRowGap * b.extend[Y] / 2, -cityRadius]), axisRotation(axis[Y], a));
     }
+    return pois;
   }
   var HM = 0;
   var VM = 1;
@@ -777,23 +809,23 @@ ${body}`;
     reflect(wing2, [1, 0, 0]);
     let body = generateShipPart(rng2, [rng2(3) + 1, rng2(3) + 1], [[-3, hullLength], [-4 * hullHeight, 4 * hullHeight]], [[1, -2 * hullWidth], [1.5, -1 * hullWidth], [1.5, 1 * hullWidth], [1, 2 * hullWidth]]);
     ts(body, axisRotation([0, 0, -1], PIH), axisRotation([0, 1, 0], PIH));
-    let ship = combine([body, wing1, wing2]);
+    let ship = combine2([body, wing1, wing2]);
     for (let v4 of ship.verts)
       v4.type = [SHIP, id, 0, 0];
     return ship;
   }
 
   // src/shaders/fMain.glsl
-  var fMain_default = "uniform float time;\nuniform float pass;\n\nin vec3 vcell;\nin vec3 vat;\nin float dist;\n\nflat in float light;\nflat in vec3 vnorm;\nflat in vec4 vcolor;\n\nflat in ivec4 vtype;\nflat in int vshape;\n\nlayout(location = 0) out vec4 c0;\nlayout(location = 1) out vec4 c1;\n\nfloat hexDigitF(int n, int place) {\n  return float((n >> (place * 4)) & 15) / 15.;\n}\n\nint hex2Digit(int n, int place) {\n  return (n >> (place * 8)) % 256;\n}\n\nvoid main() {\n  //vec4 worldAt = \n  int itype = vtype.x;\n  int t1 = vtype.y;\n  int t2 = vtype.z;\n  float bright = light;\n  //vt = 2.0101000000;\n  if(itype == 2) {\n    float hm = hexDigitF(t2, 0);\n    float vm = hexDigitF(t2, 1);\n    float x = fract(vcell.x);\n    float y = fract(vcell.y);\n\n    float far = 0., near = 0.;\n\n    if(dist >= 500.) {\n      //bright *= float(vtype.a)/256.;\n      far = x > hm &&\n        x < 1. - hm &&\n        y > vm &&\n        y < 1. - vm ? -float(vtype.a) / 256. : .0;\n    }\n\n    if(dist <= 700.) {\n      float cols = float(hex2Digit(t1, 1));\n      float rows = float(hex2Digit(t1, 0));\n      float hb = hexDigitF(t2, 2);\n      float vb = hexDigitF(t2, 3);\n      near = x > hm &&\n        x < 1. - hm &&\n        y > vm &&\n        y < 1. - vm &&\n        (cols == 1. || fract((x - hm) / (1. - hm * 2.) * cols) > hb) &&\n        (rows == 1. || fract((y - vm) / (1. - vm * 2.) * rows) > vb) ? -1. : .0;\n    }\n\n    float l = clamp((dist - 500.) / 200., 0., 1.);\n    bright += mix(near, far, l);\n\n  } else if(itype == 4) {\n    bright += vat.z * 5e-4 + (fract(vat.y / 20. + 0.55) < .1 || fract(atan(vat.x, vat.z) / 3.141 * 70.) < .1 ? -1. : 0.);\n  } else if(itype == 5) {\n    bright = 2.;\n  }\n\n  if(itype == 7) {\n    float y = fract(vcell.y);\n    bright += y < 0.03 || y > 0.97 || y>0.49 && y<0.51/* || mod(vcell.x,3. + sin(floor(vcell.y)*100.)) < 0.03*/? -.5 : .0;\n  }\n\n  if(bright > 0.)\n    bright += vcell.y * 0.05 - 0.3;\n  /*if(mod(vcell.x,0.2)<0.1 != mod(vcell.y,0.2)<0.1)\n    light /= 2.;*/\n  //c0 = vec4(light, 0., 0., 1.);\n  c0 = vec4(vcolor.rgb * bright, vcolor.a);\n  //c1 = vec4(gl_FrontFacing?0.:1.,0.,0.,0.);\n  //c1 = vec4(vat / 1000. + 0.5, 1.);\n  //c1 = vec4(1.,0.,0.,1.);\n  //if(pass == 0.)\n  //c1 = vec4(gl_FragCoord.xyz * gl_FragCoord.w, 1.);\n  //c1 = vec4(vnorm, 1.);\n  c1 = vec4(vnorm*0.5+0.5, gl_FragCoord.z * gl_FragCoord.w);\n}\n";
+  var fMain_default = "uniform float time;\nuniform float pass;\n\nin vec3 vcell;\nin vec3 vat;\nin float dist;\n\nflat in float light;\nflat in vec3 vnorm;\nflat in vec4 vcolor;\n\nflat in ivec4 vtype;\nflat in int vshape;\n\nlayout(location = 0) out vec4 c0;\nlayout(location = 1) out vec4 c1;\n\nfloat hexDigitF(int n, int place) {\n  return float((n >> (place * 4)) & 15) / 15.;\n}\n\nint hex2Digit(int n, int place) {\n  return (n >> (place * 8)) % 256;\n}\n\nvoid main() {\n  //vec4 worldAt = \n  int itype = vtype.x;\n  int t1 = vtype.y;\n  int t2 = vtype.z;\n  float bright = light;\n  //vt = 2.0101000000;\n  if(itype == 2) {\n    float hm = hexDigitF(t2, 0);\n    float vm = hexDigitF(t2, 1);\n    float x = fract(vcell.x);\n    float y = fract(vcell.y);\n\n    float far = 0., near = 0.;\n\n    if(dist >= 500.) {\n      //bright *= float(vtype.a)/256.;\n      far = x > hm &&\n        x < 1. - hm &&\n        y > vm &&\n        y < 1. - vm ? -float(vtype.a) / 256. : .0;\n    }\n\n    if(dist <= 700.) {\n      float cols = float(hex2Digit(t1, 1));\n      float rows = float(hex2Digit(t1, 0));\n      float hb = hexDigitF(t2, 2);\n      float vb = hexDigitF(t2, 3);\n      near = x > hm &&\n        x < 1. - hm &&\n        y > vm &&\n        y < 1. - vm &&\n        (cols == 1. || fract((x - hm) / (1. - hm * 2.) * cols) > hb) &&\n        (rows == 1. || fract((y - vm) / (1. - vm * 2.) * rows) > vb) ? -1. : .0;\n    }\n\n    float l = clamp((dist - 500.) / 200., 0., 1.);\n    bright += mix(near, far, l);\n\n  } else if(itype == 4) {\n    bright += vat.z * 5e-4 + (fract(vat.y / 40. + 0.55) < .1 || fract(atan(vat.x, vat.z) / 3.141 * 36. + 0.45) < .1 ? -1. : 0.);\n  } else if(itype == 5) {\n    bright = 2.;\n  }\n\n  if(itype == 7) {\n    float y = fract(vcell.y);\n    bright += y < 0.03 || y > 0.97 || y>0.49 && y<0.51/* || mod(vcell.x,3. + sin(floor(vcell.y)*100.)) < 0.03*/? -.5 : .0;\n  }\n\n  if(bright > 0.)\n    bright += vcell.y * 0.05 - 0.3;\n  /*if(mod(vcell.x,0.2)<0.1 != mod(vcell.y,0.2)<0.1)\n    light /= 2.;*/\n  //c0 = vec4(light, 0., 0., 1.);\n  c0 = vec4(vcolor.rgb * bright, vcolor.a);\n  //c1 = vec4(gl_FrontFacing?0.:1.,0.,0.,0.);\n  //c1 = vec4(vat / 1000. + 0.5, 1.);\n  //c1 = vec4(1.,0.,0.,1.);\n  //if(pass == 0.)\n  //c1 = vec4(gl_FragCoord.xyz * gl_FragCoord.w, 1.);\n  //c1 = vec4(vnorm, 1.);\n  c1 = vec4(vnorm*0.5+0.5, gl_FragCoord.z * gl_FragCoord.w);\n}\n";
 
   // src/shaders/fScreen.glsl
-  var fScreen_default = "uniform sampler2D T0;\nuniform sampler2D T1;\nuniform sampler2D Depth;\nuniform mat4 invCamera;\nuniform mat4 invPerspective;\nuniform mat4 flyer;\nuniform vec3 scp0;\nuniform vec3 scp1;\nuniform vec3 scp2;\n\nin vec2 uv;\n\nout vec4 color;\n\nfloat Noise2d(in vec2 x) {\n  float xhash = cos(x.x * 37.0);\n  float yhash = cos(x.y * 57.0);\n  return fract(415.92653 * (xhash + yhash));\n}\n\nint b16[16] = int[] (1, 9, 3, 11, 13, 5, 15, 7, 4, 12, 2, 10, 16, 8, 14, 6);\nint b64[64] = int[] (1, 33, 9, 41, 3, 35, 11, 43, 49, 17, 57, 25, 51, 19, 59, 27, 13, 45, 5, 37, 15, 47, 7, 39, 61, 29, 53, 21, 63, 31, 55, 23, 4, 36, 12, 44, 2, 34, 10, 42, 52, 20, 60, 28, 50, 18, 58, 26, 16, 48, 8, 40, 14, 46, 6, 38, 64, 32, 56, 24, 62, 30, 54, 22);\n\nfloat dither(float v, ivec2 F) {\n  return v * 75. > float(b64[F.y % 8 * 8 + F.x % 8]) ? 1. : 0.;\n}\n\nconst bool ditherOn = true;\nconst float collisionDepth = 0.6;\n\nvoid main() {\n\n  ivec2 F = ivec2(gl_FragCoord.xy);\n\n  float depth = texelFetch(Depth, F, 0).r;\n  color = vec4(1.);\n\n  vec4 screenPos = vec4(uv.x, -uv.y, depth * 2. - 1., 1.);\n\n  vec4 pos4 = invCamera * screenPos;\n  vec3 pos = (pos4 / pos4.w).xyz - flyer[3].xyz;\n\n  if(distance(vec2(scp0.x, scp0.y), vec2(F)) < 10.) {\n    color = vec4(1., 0., 0., 1.);\n    return;\n  }\n\n  if(distance(vec2(scp1.x, scp1.y), vec2(F)) < 10.) {\n    color = vec4(0., 1., 0., 1.);\n    return;\n  }\n\n  if(distance(vec2(scp2.x, scp2.y), vec2(F)) < 10.) {\n    color = vec4(0., 0., 1., 1.);\n    return;\n  }\n\n  if(F.y < 4 && F.x < 4) {\n    color = vec4(\n      texelFetch(Depth, ivec2(scp0.xy), 0).r < collisionDepth ? 1. : 0., \n      texelFetch(Depth, ivec2(scp1.xy), 0).r < collisionDepth ? 1. : 0., \n      texelFetch(Depth, ivec2(scp2.xy), 0).r < collisionDepth ? 1. : 0., 1.);\n    return;\n  }\n\n  if(depth == 1.) {\n\n    vec3 pos1 = pos / length(pos);\n\n    if(Noise2d(vec2(floor((pos1.x + pos1.y) * 3e2), floor(pos1.z * 3e2))) > 0.99)\n      color.xyz = pos1 * 0.5 + 0.5;\n    else\n      color.xyz = vec3(0.);\n\n  } else {\n    color = texelFetch(T0, F, 0);\n\n    if(color.r > 0.)\n      color = (color * 2. + texelFetch(T0, F + ivec2(1, 0), 0) + texelFetch(T0, F + ivec2(0, 1), 0)) * 0.25;\n\n    float diff = 0.;\n    for(int i = 0; i < 8; i++) {\n      int step = i / 4;\n      ivec2 place = ivec2(i % 2, i % 4 / 2) * step;\n      float edge = texelFetch(Depth, F + place, 0).r +\n        texelFetch(Depth, F - place, 0).r - depth * 2.;\n      diff += abs(edge);\n    }\n\n    if(depth > 0.99)\n      diff *= 1. + (depth - 0.99);\n\n    if(diff > .00005) {\n      color.rgb = normalize(color.rgb) * 0.3;\n    } else {\n      if(ditherOn) {\n        color.r = dither(color.r, F);\n        color.g = dither(color.g, F);\n        color.b = dither(color.b, F);\n      }\n    }\n\n    if(depth > 0.995 && (depth - 0.99) * 1000. > float(b64[F.y % 8 * 8 + F.x % 8])) {\n      color = vec4(1.);\n    }\n  }\n\n  //color = texelFetch(T1, F, 0);\n  color.a = 1.;\n}";
+  var fScreen_default = "uniform sampler2D T0;\nuniform sampler2D T1;\nuniform sampler2D Depth;\nuniform mat4 invCamera;\nuniform mat4 invPerspective;\nuniform mat4 flyer;\nuniform vec3 scp0;\nuniform vec3 scp1;\nuniform vec3 scp2;\n\nin vec2 uv;\n\nout vec4 color;\n\nfloat Noise2d(in vec2 x) {\n  float xhash = cos(x.x * 37.0);\n  float yhash = cos(x.y * 57.0);\n  return fract(415.92653 * (xhash + yhash));\n}\n\nint b16[16] = int[] (1, 9, 3, 11, 13, 5, 15, 7, 4, 12, 2, 10, 16, 8, 14, 6);\nint b64[64] = int[] (1, 33, 9, 41, 3, 35, 11, 43, 49, 17, 57, 25, 51, 19, 59, 27, 13, 45, 5, 37, 15, 47, 7, 39, 61, 29, 53, 21, 63, 31, 55, 23, 4, 36, 12, 44, 2, 34, 10, 42, 52, 20, 60, 28, 50, 18, 58, 26, 16, 48, 8, 40, 14, 46, 6, 38, 64, 32, 56, 24, 62, 30, 54, 22);\n\nfloat dither(float v, ivec2 F) {\n  return v * 75. > float(b64[F.y % 8 * 8 + F.x % 8]) ? 1. : 0.;\n}\n\nconst bool ditherOn = true;\nconst float collisionDepth = 0.6;\n\nvoid main() {\n\n  ivec2 F = ivec2(gl_FragCoord.xy);\n\n  float depth = texelFetch(Depth, F, 0).r;\n  color = vec4(1.);\n\n  vec4 screenPos = vec4(uv.x, -uv.y, depth * 2. - 1., 1.);\n\n  vec4 pos4 = invCamera * screenPos;\n  vec3 pos = (pos4 / pos4.w).xyz - flyer[3].xyz;\n\n  /*if(distance(vec2(scp0.x, scp0.y), vec2(F)) < 10.) {\n    color = vec4(1., 0., 0., 1.);\n    return;\n  }\n\n  if(distance(vec2(scp1.x, scp1.y), vec2(F)) < 10.) {\n    color = vec4(0., 1., 0., 1.);\n    return;\n  }\n\n  if(distance(vec2(scp2.x, scp2.y), vec2(F)) < 10.) {\n    color = vec4(0., 0., 1., 1.);\n    return;\n  }*/\n\n  if(F.y < 4 && F.x < 4) {\n    color = vec4(\n      texelFetch(Depth, ivec2(scp0.xy), 0).r < collisionDepth ? 1. : 0., \n      texelFetch(Depth, ivec2(scp1.xy), 0).r < collisionDepth ? 1. : 0., \n      texelFetch(Depth, ivec2(scp2.xy), 0).r < collisionDepth ? 1. : 0., 1.);\n    return;\n  }\n\n  if(depth == 1.) {\n\n    vec3 pos1 = pos / length(pos);\n\n    if(Noise2d(vec2(floor((pos1.x + pos1.y) * 3e2), floor(pos1.z * 3e2))) > 0.99)\n      color.xyz = pos1 * 0.5 + 0.5;\n    else\n      color.xyz = vec3(0.);\n\n  } else {\n    color = texelFetch(T0, F, 0);\n\n    if(color.r > 0.)\n      color = (color * 2. + texelFetch(T0, F + ivec2(1, 0), 0) + texelFetch(T0, F + ivec2(0, 1), 0)) * 0.25;\n\n    float diff = 0.;\n    for(int i = 0; i < 8; i++) {\n      int step = i / 4;\n      ivec2 place = ivec2(i % 2, i % 4 / 2) * step;\n      float edge = texelFetch(Depth, F + place, 0).r +\n        texelFetch(Depth, F - place, 0).r - depth * 2.;\n      diff += abs(edge);\n    }\n\n    if(depth > 0.99)\n      diff *= 1. + (depth - 0.99);\n\n    if(diff > .00005) {\n      color.rgb = normalize(color.rgb) * 0.3;\n    } else {\n      if(ditherOn) {\n        color.r = dither(color.r, F);\n        color.g = dither(color.g, F);\n        color.b = dither(color.b, F);\n      }\n    }\n\n    if(depth > 0.995 && (depth - 0.99) * 1000. > float(b64[F.y % 8 * 8 + F.x % 8])) {\n      color = vec4(1.);\n    }\n  }\n\n  //color = texelFetch(T1, F, 0);\n  color.a = 1.;\n}";
 
   // src/shaders/vScreenQuad.glsl
   var vScreenQuad_default = "out vec2 uv;\n\nvoid main() {\n  int i = gl_VertexID;\n  ivec2 uvi = ivec2(i % 2, (i + 1) % 4 / 2) * 2 - 1;\n  gl_Position = vec4(uvi.x, uvi.y, 0, 1);\n  uv = vec2(uvi);\n  //gl_Position = vec4(i%2*2-1, 1-(i+1)%4/2*2, 0., 1.);\n}";
 
   // src/shaders/vMain.glsl
-  var vMain_default = "uniform mat4 camera;\r\nuniform mat4 flyer;\r\nuniform vec3 sun;\r\nuniform float time;\r\n\r\nin vec3 at;\r\nin vec3 norm;\r\nin vec3 cell;\r\nin vec4 type;\r\nin float shape;\r\n\r\nout vec3 vcell;\r\nout vec3 vat;\r\nout float dist;\r\nflat out float light;\r\n\r\nflat out vec3 vnorm;\r\nflat out vec4 vcolor;\r\n\r\nflat out ivec4 vtype;\r\nflat out int vshape;\r\n\r\nfloat rand(float n){return fract(sin(n) * 43758.5453123);}\r\n\r\nmat4 axisRotation(vec3 axis, float angle) {\r\n\r\n  float x = axis.x;\r\n  float y = axis.y;\r\n  float z = axis.z;\r\n\r\n  float n = sqrt(x * x + y * y + z * z);\r\n  x /= n;\r\n  y /= n;\r\n  z /= n;\r\n  float c = cos(angle);\r\n  float s = sin(angle);\r\n  float omc = 1. - c;\r\n\r\n  return mat4(x * x + (1. - x * x) * c, x * y * omc + z * s, x * z * omc - y * s, 0., x * y * omc - z * s, y * y + (1. - y * y) * c, y * z * omc + x * s, 0., x * z * omc + y * s, y * z * omc - x * s, z * z + (1. - z * z) * c, 0., 0., 0., 0., 1.);\r\n}\r\n\r\nvoid main() {\r\n  vat = at;\r\n  vnorm = norm;\r\n  vcell = cell;\r\n\r\n  vtype = ivec4(type);\r\n  vshape = int(shape);\r\n\r\n  vec4 at4 = vec4(at, 1.);\r\n\r\n  if(vtype.x == 9) {\r\n    float a = rand(shape);\r\n    vec3 axis = normalize(vec3(rand(a+1.), rand(a+2.), rand(a+3.)));\r\n    //vec3 axis = vec3(1.,0.,0.);   \r\n    light -= a*0.3; \r\n    at4 = axisRotation(axis, time * 5e-3 * (.5+rand(a+4.)) + rand(a+4.) ) * at4;\r\n    at4.xyz += 10. * (vec3(rand(a+5.), rand(a+6.), rand(a+7.)) - .5);\r\n    at4.xyz += vec3(vtype.yzw);\r\n  }\r\n\r\n  //int si = int(shape);\r\n\r\n  if(vshape > 0)\r\n    //vcolor.rgb = vec3(shape/10000., mod(shape,100.)/100., mod(shape,10.)/10.) * 1.5;\r\n    vcolor.rgb = vec3(1.);\r\n  else\r\n    vcolor.rgb = vec3(.9);\r\n  //color = vec4(1., 1., 0., 1.);\r\n\r\n  if(vtype.x == 3) {\r\n    at4 = flyer * at4;\r\n    mat4 fnorm = flyer;\r\n    fnorm[3] = vec4(0.);\r\n    vnorm = normalize((fnorm * vec4(norm, 1.)).xyz);\r\n  }\r\n\r\n  if(vtype.x == 7) {\r\n    int id = vtype.y;\r\n    if(id % 2 == 0) {\r\n      vnorm.y = -vnorm.y;\r\n      at4.y = -at4.y;\r\n    }\r\n    float shift = fract(fract(float(id) / 1e2) + time * 1e-5 * (id % 2 == 1 ? 3. : -3.));\r\n    at4.y = at4.y + 7300. - pow(shift * 120., 2.);\r\n  }\r\n\r\n  vec4 pos;\r\n\r\n  if(vtype.x == 8) {\r\n    pos = at4;\r\n  } else {\r\n    pos = camera * at4;\r\n  }\r\n\r\n  vat = at4.xyz;\r\n  pos.y = -pos.y;\r\n\r\n  vec3 toSun = sun - vat;\r\n  //vec3 toSun = vec3(0, 1000, 0);\r\n  light = dot(vnorm, normalize(toSun)) * 0.2 + .9 - length(toSun) * 1e-6;\r\n\r\n  if(vtype.x == 7) {\r\n    light += 0.2;\r\n  }\r\n\r\n  dist = distance(vat, flyer[3].xyz);\r\n\r\n  gl_Position = pos;\r\n}\r\n";
+  var vMain_default = "uniform mat4 camera;\r\nuniform mat4 flyer;\r\nuniform vec3 sun;\r\nuniform float time;\r\n\r\nin vec3 at;\r\nin vec3 norm;\r\nin vec3 cell;\r\nin vec4 type;\r\nin float shape;\r\n\r\nout vec3 vcell;\r\nout vec3 vat;\r\nout float dist;\r\nflat out float light;\r\n\r\nflat out vec3 vnorm;\r\nflat out vec4 vcolor;\r\n\r\nflat out ivec4 vtype;\r\nflat out int vshape;\r\n\r\nfloat rand(float n){return fract(sin(n) * 43758.5453123);}\r\n\r\nmat4 axisRotation(vec3 axis, float angle) {\r\n\r\n  float x = axis.x;\r\n  float y = axis.y;\r\n  float z = axis.z;\r\n\r\n  float n = sqrt(x * x + y * y + z * z);\r\n  x /= n;\r\n  y /= n;\r\n  z /= n;\r\n  float c = cos(angle);\r\n  float s = sin(angle);\r\n  float omc = 1. - c;\r\n\r\n  return mat4(x * x + (1. - x * x) * c, x * y * omc + z * s, x * z * omc - y * s, 0., x * y * omc - z * s, y * y + (1. - y * y) * c, y * z * omc + x * s, 0., x * z * omc + y * s, y * z * omc - x * s, z * z + (1. - z * z) * c, 0., 0., 0., 0., 1.);\r\n}\r\n\r\nvoid main() {\r\n  vat = at;\r\n  vnorm = norm;\r\n  vcell = cell;\r\n\r\n  vtype = ivec4(type);\r\n  vshape = int(shape);\r\n\r\n  vec4 at4 = vec4(at, 1.);\r\n\r\n  vcolor.rgb = vec3(1.);\r\n\r\n  if(vtype.x == 9) {\r\n    vcolor.rgb = vec3(1.,0.,1.);\r\n    float a = rand(shape);\r\n    vec3 axis = normalize(vec3(rand(a+1.), rand(a+2.), rand(a+3.)));\r\n    //vec3 axis = vec3(1.,0.,0.);   \r\n    light -= a*0.3; \r\n    at4 = axisRotation(axis, time * 5e-3 * (.5+rand(a+4.)) + rand(a+4.) ) * at4;\r\n    at4.xyz += 15. * (vec3(rand(a+5.), rand(a+6.), rand(a+7.)) - .5);\r\n    at4.xyz += vec3(vtype.yzw);\r\n  }\r\n\r\n  //int si = int(shape);\r\n\r\n  /*if(vshape > 0)\r\n    //vcolor.rgb = vec3(shape/10000., mod(shape,100.)/100., mod(shape,10.)/10.) * 1.5;\r\n    vcolor.rgb = vec3(1.);\r\n  else\r\n    vcolor.rgb = vec3(.9);*/\r\n  //color = vec4(1., 1., 0., 1.);\r\n\r\n\r\n  if(vtype.x == 3) {\r\n    at4 = flyer * at4;\r\n    mat4 fnorm = flyer;\r\n    fnorm[3] = vec4(0.);\r\n    vnorm = normalize((fnorm * vec4(norm, 1.)).xyz);\r\n  }\r\n\r\n  if(vtype.x == 7) {\r\n    int id = vtype.y;\r\n    if(id % 2 == 0) {\r\n      vnorm.y = -vnorm.y;\r\n      at4.y = -at4.y;\r\n    }\r\n    float shift = fract(fract(float(id) / 1e2) + time * 1e-5 * (id % 2 == 1 ? 3. : -3.));\r\n    at4.y = at4.y + 7300. - pow(shift * 120., 2.);\r\n  }\r\n\r\n  vec4 pos;\r\n\r\n  if(vtype.x == 8) {\r\n    pos = at4;\r\n  } else {\r\n    pos = camera * at4;\r\n  }\r\n\r\n  vat = at4.xyz;\r\n  pos.y = -pos.y;\r\n\r\n  vec3 toSun = sun - vat;\r\n  //vec3 toSun = vec3(0, 1000, 0);\r\n  light = dot(vnorm, normalize(toSun)) * 0.2 + .9 - length(toSun) * 1e-6;\r\n\r\n  if(vtype.x == 7) {\r\n    light += 0.2;\r\n  }\r\n\r\n  dist = distance(vat, flyer[3].xyz);\r\n\r\n  gl_Position = pos;\r\n}\r\n";
 
   // src/shaders.ts
   var shaders = {fMain: fMain_default, vMain: vMain_default, fScreen: fScreen_default, vScreenQuad: vScreenQuad_default};

@@ -18,6 +18,11 @@ export const multiply = (a: Mat, b: Mat) => a.map((_, n) => {
     b[row4 + 3] * a[col + 12]
   )
 });
+
+export const combine = (...m: Mat[]):Mat => 
+  m.length == 1 ? m[0] : 
+  combine(...m.slice(0, m.length - 2), multiply(m[m.length-1], m[m.length - 2]));
+
 export const sum = (a: Mat, b: Mat) => a.map((x, i) => x + b[i]) as Mat;
 export const sub = (a: Mat, b: Mat) => a.map((x, i) => x - b[i]) as Mat;
 export const scale = (m: Mat, n: number) => m.map(x => n * x);
@@ -141,6 +146,7 @@ export function transform(m: Mat, v: Vec3) {
 }
 
 export const scaling = (n: number) => range(16).map(i => i == 15 ? 1 : i % 5 ? 0 : n);
+export const scalingv = (v: Vec3) => range(16).map(i => i == 15 ? 1 : i % 5 ? 0 : v[i / 5]);
 
 export const translation = (v: Vec3) => [
   1, 0, 0, 0,

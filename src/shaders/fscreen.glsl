@@ -40,7 +40,7 @@ void main() {
   vec4 pos4 = invCamera * screenPos;
   vec3 pos = (pos4 / pos4.w).xyz - flyer[3].xyz;
 
-  if(distance(vec2(scp0.x, scp0.y), vec2(F)) < 10.) {
+  /*if(distance(vec2(scp0.x, scp0.y), vec2(F)) < 10.) {
     color = vec4(1., 0., 0., 1.);
     return;
   }
@@ -53,7 +53,7 @@ void main() {
   if(distance(vec2(scp2.x, scp2.y), vec2(F)) < 10.) {
     color = vec4(0., 0., 1., 1.);
     return;
-  }
+  }*/
 
   if(F.y < 4 && F.x < 4) {
     color = vec4(

@@ -49,24 +49,28 @@ void main() {
 
   vec4 at4 = vec4(at, 1.);
 
+  vcolor.rgb = vec3(1.);
+
   if(vtype.x == 9) {
+    vcolor.rgb = vec3(1.,0.,1.);
     float a = rand(shape);
     vec3 axis = normalize(vec3(rand(a+1.), rand(a+2.), rand(a+3.)));
     //vec3 axis = vec3(1.,0.,0.);   
     light -= a*0.3; 
     at4 = axisRotation(axis, time * 5e-3 * (.5+rand(a+4.)) + rand(a+4.) ) * at4;
-    at4.xyz += 10. * (vec3(rand(a+5.), rand(a+6.), rand(a+7.)) - .5);
+    at4.xyz += 15. * (vec3(rand(a+5.), rand(a+6.), rand(a+7.)) - .5);
     at4.xyz += vec3(vtype.yzw);
   }
 
   //int si = int(shape);
 
-  if(vshape > 0)
+  /*if(vshape > 0)
     //vcolor.rgb = vec3(shape/10000., mod(shape,100.)/100., mod(shape,10.)/10.) * 1.5;
     vcolor.rgb = vec3(1.);
   else
-    vcolor.rgb = vec3(.9);
+    vcolor.rgb = vec3(.9);*/
   //color = vec4(1., 1., 0., 1.);
+
 
   if(vtype.x == 3) {
     at4 = flyer * at4;
