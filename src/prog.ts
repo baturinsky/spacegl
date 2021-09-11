@@ -9,23 +9,25 @@ import * as snd from "./sound";
 import { range, rangef } from "./g0/misc";
 import { gl, putShapesInElementBuffers, setAttrDatabuffers } from "./g0/gl";
 
+let noiseGain:GainNode, noiseVol = 1;
+
+const attributes = { at: [3], norm: [3], cell: [3], type: [4], shape: [1], up: [3] };
+
 function main() {
 
   const viewSize: Vec2 = [1200, 800];
 
   let startTime = Date.now();
 
-  let [world, flyer] = initGeometry();
+  let [world, flyer, debris] = initGeometry();
 
   let [pMain, C] = render.init(viewSize);
 
   game.initControls();
-  let state = game.init();
-
-  let conf = { at: [3], norm: [3], cell: [3], type: [4], shape: [1] };
-
-  let [bufs, elements] = putShapesInElementBuffers(world, conf);
-  let [bufsF, elementsF] = putShapesInElementBuffers(flyer, conf);
+  let state = game.init(debris);
+  
+  let [bufs, elements] = putShapesInElementBuffers(world, attributes);
+  let [bufsF, elementsF] = putShapesInElementBuffers(flyer, attributes);
 
   console.log(`${Date.now() - startTime} ms ${elements.faces.length} faces`);
 
@@ -33,7 +35,14 @@ function main() {
 
   function update(dTime: number) {
     game.update(dTime);
-    render.frame(state, [bufs, elements], [bufsF, elementsF]);
+    render.frame(state, [bufs, elements], [bufsF, elementsF], dTime);
+    if(noiseGain){
+      noiseGain.gain.value = state.vel * noiseVol * 0.7;
+      if(dTime*state.vel*10 > Math.random()){
+        noiseVol = .5 + Math.random();
+      }
+      noiseVol = noiseVol * (1-dTime) + dTime;
+    }
     t++;
   }
 
@@ -41,15 +50,13 @@ function main() {
   C.onclick = e => {
     togglePlaying(true);
     if (!started) {
+      snd.init();
+      noiseGain = snd.playNoise();
       let lastTime = Date.now();
       const loop = () => {
         if (playing())
-          update(Date.now() - lastTime)
+          update((Date.now() - lastTime) / 1000)
         lastTime = Date.now();
-        //requestAnimationFrame(()=>{new Promise(r=>r(null)).then(loop)})
-        //requestAnimationFrame(()=>setTimeout(loop, 0));
-        //setTimeout(loop, 1000/60);
-        //requestPostAnimationFrame(()=>setTimeout(loop, 0));
         requestAnimationFrame(loop);
       }
       loop();
@@ -73,10 +80,12 @@ function main() {
     if (on == null)
       on = !playing();
 
-    if (on)
+    if (on){
       C.requestPointerLock();
-    else
+    } else {
       document.exitPointerLock();
+      noiseGain.gain.value = 0;
+    }
   }
 
   update(0);
@@ -93,5 +102,7 @@ function testSound() {
 }
 
 main();
+
+//testSound();
 
 

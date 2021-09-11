@@ -12,7 +12,7 @@ const ts = shape.transformShape;
 
 const BUILDING = 2, FLYER = 3, TUNNEL = 4, WARPER = 5, SHIP = 7, FIXED = 8, DEBRIS = 9, AD = 10;
 
-type Building = Shape & { height: number, extend: Vec2 }
+type Building = Shape & { height: number, extend: Vec2, density: number }
 
 export const cityCols = 72,
   cityRows = 180,
@@ -20,7 +20,8 @@ export const cityCols = 72,
   cityRowGap = 40,
   citySize = cityCols * cityRows,
   cityDepth = cityRows * cityRowGap,
-  cityColGap = cityRadius * PI2 / cityCols;
+  cityColGap = cityRadius * PI2 / cityCols,
+  ShipsNumber = 150, MaxDebris = 30 * 64;
 
 export function putShapesInBuffers(shapes: any, prog: WebGLProgram, conf: any) {
   let [bufs, elements] = g0.putShapesInElementBuffers(shapes, conf);
@@ -30,13 +31,19 @@ export function putShapesInBuffers(shapes: any, prog: WebGLProgram, conf: any) {
   return [bufs, elements] as [g0.ShapeBuffers, shape.Elements];
 }
 
+export type Debris = shape.Vert & { live: boolean, up:v3.Vec3, score:number };
+
 export function initGeometry() {
 
   let rng = RNG(1);
 
   let buildings = generateCity(rng);
 
-  let solid:Shape[] = buildings.slice();
+  let solid: Shape[] = buildings.filter(b => b);
+
+  let tunnel = tunnelGeometry(rng, 72, cityRadius, cityRadius * 1.3, cityRows * cityRowGap);
+  ts(tunnel, m4.axisRotation(v3.axis[X], -Math.PI / 2))
+  solid.push(tunnel)
 
   //let world: Shape[] = [];
 
@@ -46,13 +53,13 @@ export function initGeometry() {
 
   //world.push(flyer);
 
-  for (let i = 0; i < 150; i++) {
+  for (let i = 0; i < ShipsNumber; i++) {
     let ship = shipGeometry(rng, i);
     let sector = i % 6;
     ts(ship,
       m4.axisRotation([0, 1, 0], PIH + (sector < 3 ? PI : 0)),
       m4.scaling(rng(5) + 2),
-      m4.translation([0,/*i/300*cityDepth*/0, cityRadius * (0.35 + rng() * 0.15)]),
+      m4.translation([0, 0, cityRadius * (0.35 + rng() * 0.15)]),
       m4.axisRotation([0, 1, 0], sector * PI2 / 6 + PI2 * 5 / 12 + rng() * 0.2 - 0.1)
     );
     solid.push(ship);
@@ -62,33 +69,45 @@ export function initGeometry() {
   shape.setType(ui, v => [FIXED, 0, 0, 0])
   world.push(ui);*/
 
-  for (let d = 0; d < buildings.length; d++) {
-    //let pos = v3.scale(v3.random(rng), 100);
-    //let pos = lastOf(buildings[rng(buildings.length)].verts).at;
-    let pos = lastOf(buildings[d].verts).at;
-    for (let i = 0; i < 20; i++) {
+  let debris: Debris[] = [];
+  while (debris.length < MaxDebris) {
+    let building = buildings[rng(buildings.length)];
+    if (building && building.height * rng() < building.density && building.density > 0.4) {
+      let score = ~~((building.density / (building.height + 10) * 400) ** 2 + 1);
+      let at = lastOf(building.verts).at;
+      let up = v3.sub(at, building.verts[building.verts.length-2].at);
+      let d = { ind: debris.length, at, up, live: true, score } as Debris;      
+      debris.push(d)
+    }
+  }
+
+  debris.forEach((debris, ind) => {
+    for (let i = 0; i < 32; i++) {
       let size = rng() * 3 + 1;
-      let junk = shape.quad(shape.vertsAt([
-        [-size / 2, -size / 2, 0], 
-        [-size / 2, size, 0], 
+      let debrisShape = shape.quad(shape.vertsAt([
+        [-size / 2, -size / 2, 0],
+        [-size / 2, size, 0],
         [size / 2, size / 2, 0],
         [size / 2, -size / 2, 0],
       ]))
-      shape.setType(junk, () => [DEBRIS, ...pos])
-      passable.push(junk);
+      debrisShape.common = {
+        type: [DEBRIS, ...debris.at],
+        shape: debris.ind * 32 + i,
+        up: debris.up
+      };
+      passable.push(debrisShape);
     }
-  }
+  });
 
   let i = 0;
   for (let s of [...solid, ...passable]) {
     i++;
     shape.calculateFlatNormals(s);
-    for (let v of s.verts) {
-      v.shape = i;
-    }
+    s.common = s.common || {};
+    s.common.shape = s.common.shape || i;
   }
 
-  return [solid, passable];
+  return [solid, passable, debris] as [Shape[], Shape[], Debris[]];
 }
 
 function flyerGeometry() {
@@ -116,7 +135,7 @@ function flyerGeometry() {
 
   let flyer = shape.combine([body, wing, engine, engine2])
 
-  shape.setType(flyer, v => [FLYER, 0, 0, 0]);
+  flyer.common = { type: [FLYER, 0, 0, 0] };
 
   ts(flyer,
     m4.scaling(0.2),
@@ -136,20 +155,11 @@ function flyerGeometry() {
 }
 
 function generateCity(rng: Rng) {
-  let shapes: shape.Shape[] = [];
-
-  //console.log(generateShipPart());
 
   let buildings = generateBuildings(rng);
   tunnelCity(buildings);
-  buildings.forEach(b => b && shapes.push(b));
 
-  let tunnel = tunnelGeometry(rng, 72, cityRadius, cityRadius * 1.3, cityRows * cityRowGap);
-  ts(tunnel, m4.axisRotation(v3.axis[X], -Math.PI / 2))
-
-  shapes.push(tunnel)
-
-  return shapes;
+  return buildings;
 }
 
 function calculateAllNormals(shapes: Shape[]) {
@@ -182,7 +192,7 @@ function tunnelGeometry(rng: Rng, divs: number, r1: number, r2: number, h: numbe
     if (v.cell[Y] == 0) v.type = [WARPER, 0, 0, 0];
 
   let combined = shape.combine([warper, ...horns]);
-  shape.setType(combined, v => v.type || [TUNNEL, 0, 0, 0]);
+  combined.common = { type: [TUNNEL, 0, 0, 0] };
 
   return combined;
 }
@@ -207,14 +217,12 @@ function roundTower(rng: Rng, r: number, i: number) {
   return building;
 }
 
-function roundTower2(rng: Rng, r: number, i: number, height: number) {
+function roundTower2(rng: Rng, r: number, i: number, height: number, simple: boolean) {
 
   let slice: Vec2[], curve: v.Vec2[], types: v.Vec4[];
 
-  let simple = rng(4);
-
   if (simple) {
-    [curve, types] = generateBuildingCurve(rng, height / 2, r * (0.5 + rng() * 0.4), true);
+    [curve, types] = generateBuildingCurve(rng, height, r * (0.5 + rng() * 0.4), true);
     slice = [[1, 1], [-1, 1], [-1, -1], [1, -1]];
   } else {
     let sectors = rng(4) + 4;
@@ -236,6 +244,13 @@ function roundTower2(rng: Rng, r: number, i: number, height: number) {
   return building;
 }
 
+function densityIn(i: number) {
+  let a = (i % cityCols) / cityCols * PI2;
+  let s = Math.sin(a * 6 + PI / 2);
+  let density = Math.min(1.4 - Math.abs(0.5 - i / citySize) * 3, s * 0.5 + 1);
+  return density;
+}
+
 function generateBuildings(rng: Rng) {
   let buildings: Building[] = new Array(citySize), heights: number[] = new Array(citySize);
 
@@ -243,35 +258,49 @@ function generateBuildings(rng: Rng) {
     if (heights[i])
       continue;
     let extend = [(rng(4) ? 0 : rng(3)), (rng(4) ? 0 : rng(3))] as Vec2;
-    let a = (i % cityCols) / cityCols * PI2;
-    let s = Math.sin(a * 6 + PI / 2);
-    let density = Math.min(1.4 - Math.abs(0.5 - i / citySize) * 3, s * 0.5 + 1);
-    let h = 0;
+    let height = 0;
+
+    let slots = [];
+    for (let x = 0; x <= extend[X]; x++)
+      for (let y = 0; y <= extend[Y]; y++)
+        slots.push(i + x + y * cityCols);
+
+    let density = 1e6;
+
+    for (let s of slots)
+      density = Math.min(density, densityIn(s));
+
     if (density > rng() * 0.3) {
       let r = 30 + rng(10);
-      if (!rng(10) && s > 0)
+      if (!rng(10))
         r *= 1.2;
       r = Math.min(18, r);
-      h = density * 20 * (8 + rng(10));
-      let building = roundTower2(rng, r * (0.5 + rng() * 0.5), i, h / r) as Building;
+      height = Math.min(density * 300, 3 + density * 20 * (8 + rng(10)));
+      let simple = rng(4) != 0;
+      if (simple)
+        height /= 2;
+      let building = roundTower2(rng, r * (0.5 + rng() * 0.5), i, height / r, simple) as Building;
       r *= 1 - (0.1 + extend[X] + extend[Y]);
       buildings[i] = building;
-      heights[i] = h;
+      heights[i] = height;
       building.extend = extend;
-      building.height = h;
-      if (extend[X] > 1 || extend[Y] > 1) {
-        for (let x = 0; x <= extend[X]; x++)
-          for (let y = 0; y <= extend[Y]; y++)
-            heights[i + x + y * cityCols] = h;
-      }
-      building.verts.push({at:[0,0, h+5] as v3.Vec3, ind:building.verts.length});
+      building.height = height;
+      building.density = density;
+      for (let s of slots)
+        heights[s] = height;
+
+
+      let poiH = height + rng()*10 + 30;
+      //POI
+      building.verts.push({ at: [0, 0, poiH-1] as v3.Vec3, ind: building.verts.length });
+      building.verts.push({ at: [0, 0, poiH] as v3.Vec3, ind: building.verts.length });
     }
   }
   return buildings;
 }
 
 function tunnelCity(buildings: Building[]) {
-  let pois:any[] = [];
+  let pois: any[] = [];
 
   for (let i = 0; i < citySize; i++) {
     let b = buildings[i];

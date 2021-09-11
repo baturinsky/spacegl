@@ -12,7 +12,7 @@ export const ATTRSIZE = 0, ATTRTYPE = 1;
 
 export type Vert = { ind: number, at: Vec3, norm?: Vec3, cell?: Vec, shape?: number, type?: Vec4, [key: string]: Vec | number };
 export type Face = [Vert, Vert, Vert];
-export type Shape = { faces: Face[], verts: Vert[] };
+export type Shape = { faces: Face[], verts: Vert[], common?: {[key: string]: number[] | number} };
 export type Elements = { faces: Uint32Array; verts: { [k: string]: Float32Array | Int32Array; } };
 
 export const defaultAttrs = { at: [3], norm: [3], cell: [3] };
@@ -27,7 +27,7 @@ export function calculateFlatNormals(s: Shape) {
 export const transformShape = (shape: Shape, ...mats: m4.Mat[]) => {
   let combined = m4.combine(...mats);
   for (let vert of shape.verts)
-    vert.at = m4.transform(combined, vert.at);    
+    vert.at = m4.transform(combined, vert.at);
 }
 
 export function reindexVerts(shape: Shape) {
@@ -62,8 +62,8 @@ export function shapesToElements(shapes: Shape[], attrs: { [id: string]: number[
   let faceCount = addUp(shapes.map(s => s.faces))
   let vertCount = addUp(shapes.map(s => s.verts))
 
-  let faces = new Uint32Array(faceCount[l] * 3);
-  let verts = dictMap(attrs, v => {
+  let faceBuf = new Uint32Array(faceCount[l] * 3);
+  let vertBufs = dictMap(attrs, v => {
     if (v[ATTRTYPE] && v[ATTRTYPE] != gc.FLOAT) {
       return new Int32Array(vertCount[l] * v[ATTRSIZE])
     } else {
@@ -75,36 +75,31 @@ export function shapesToElements(shapes: Shape[], attrs: { [id: string]: number[
   shapes.forEach((shape, shapei) => {
     for (let face of shape.faces) {
       const vShift = vertCount[shapei];
-      faces[f++] = face[0].ind + vShift;
-      faces[f++] = face[1].ind + vShift;
-      faces[f++] = face[2].ind + vShift;
+      faceBuf[f++] = face[0].ind + vShift;
+      faceBuf[f++] = face[1].ind + vShift;
+      faceBuf[f++] = face[2].ind + vShift;
     }
   });
 
-  for (let bufName in verts) {
+  for (let bufName in vertBufs) {
     let size = attrs[bufName][ATTRSIZE];
-    let buf = verts[bufName];
+    let buf = vertBufs[bufName];
     let i = 0;
-    if (size == 1) {
-      for (let shape of shapes) {
-        for (let vert of shape.verts) {
-          if (vert[bufName])
-            buf[i] = vert[bufName] as number;
-          i++;
-        }
+    for (let shape of shapes) {
+      let base = shape.common?shape.common[bufName]:null;
+      for (let vert of shape.verts) {
+        let value = vert[bufName] || base;
+        if (value)
+          if (size == 1)
+            buf[i] = value as number;
+          else
+            buf.set(value as number[], i * size);
+        i++;
       }
-    } else {
-      for (let shape of shapes) {
-        for (let vert of shape.verts) {
-          if (vert[bufName])
-            buf.set(vert[bufName] as number[], i * size);
-          i++
-        }
-      };
     }
   }
 
-  return { faces, verts } as Elements;
+  return { faces: faceBuf, verts: vertBufs } as Elements;
 }
 
 export function mesha(rows: number, arr: Vec3[]) {
@@ -212,9 +207,15 @@ export function reflect(shape: Shape, norm: Vec3) {
   invert(shape);
 }
 
-export function setType(s: Shape, f: (v: Vert) => Vec4) {
+export function set(s: Shape, field: string, f: (v: Vert) => any) {
   for (let v of s.verts)
-    v.type = f(v);
+    v[field] = f(v);
+}
+
+export function setIfNull(s: Shape, field: string, f: (v: Vert) => any) {
+  for (let v of s.verts)
+    if (v[field] == null)
+      v[field] = f(v);
 }
 
 export function triangle(verts: Vert[]) {

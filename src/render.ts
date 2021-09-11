@@ -5,27 +5,41 @@ import * as v3 from "./g0/v3"
 import shaders from "./shaders"
 import * as m4 from "./g0/m4"
 import { Elements, invert } from "./g0/shape";
-import { PI, rangef, X, Y, Z } from "./g0/misc";
+import { PI, rangef, RNG, X, Y, Z } from "./g0/misc";
 import { Vec3 } from "./g0/v3";
 import * as game from "./game"
-import { dist, Vec2, mulEach } from "./g0/v";
+import { dist, Vec2, mulEach, vec3 } from "./g0/v";
 import { cityDepth } from "./generator";
+import { test } from "./sound";
+
+type Notification = {text:string, at:Vec2};
 
 let
   pMain: WebGLProgram, pScreen: WebGLProgram,
   pMainUniform: g0.Uniforms, pScreenUniform: g0.Uniforms,
   textures: g0.Texture[], framebuffer: WebGLFramebuffer,
-  viewSize: Vec2;
+  viewSize: Vec2, cx2d:CanvasRenderingContext2D,
+  notifications: Notification[] = [],
+  smoothScore = 0;
+
+export function notify(text:string){
+  notifications.push({text, at:[viewSize[X]*(Math.random()*0.2+0.4), viewSize[Y]/2]});
+}
 
 export function init(size: Vec2) {
   let C = document.getElementById("C") as HTMLCanvasElement;
+  let D = document.getElementById("D") as HTMLCanvasElement;
 
   viewSize = size;
 
-  C.width = viewSize[X];
-  C.height = viewSize[Y];
+  C.width = D.width = viewSize[X];
+  C.height = D.height = viewSize[Y];
+  D.style.marginTop = `${-viewSize[Y]}px`;
 
   g0.context(C);
+
+  cx2d = D.getContext("2d");
+  cx2d.fillStyle = "#fff";
 
   pMain = g0.compile(shaders.vMain, shaders.fMain);
   pMainUniform = g0.uniforms(pMain);
@@ -42,25 +56,63 @@ export function init(size: Vec2) {
 
 const crashPoints: Vec3[] = [[-1, 1, -1], [1, 1, -1], [0, 1, -1]];
 
-export function frame(state: game.State,
-  [bufs, elements]: [g0.ShapeBuffers, Elements],
-  [bufsF, elementsF]: [g0.ShapeBuffers, Elements]) {
-  I.innerHTML = `LMB click to speed up, RMB to speed down. ${state.at.map(v => ~~v)} | ${crashPixel[0]};${crashPixel[1]};${crashPixel[2]}`;
+let rng = RNG(1);
 
-  let time = state.time;
+function write(text:string, x:number, y:number){
+  cx2d.fillText(text, x, y);
+  cx2d.strokeText(text, x, y);
+}
+
+export function frame(gs: game.GameState,
+  [bufs, elements]: [g0.ShapeBuffers, Elements],
+  [bufsF, elementsF]: [g0.ShapeBuffers, Elements], dTime:number) {
+  //I.innerHTML = `LMB click to speed up, RMB to speed down. consuming ${gs.consumingStage} | ${gs.at.map(v => ~~v)} | ${crashPixel[0]};${crashPixel[1]};${crashPixel[2]}`;
+
+  cx2d.clearRect(0,0,viewSize[X], viewSize[Y]);
+
+  if(gs.combo){
+    cx2d.textAlign="center";
+    cx2d.font = "bold 32pt sans-serif";
+    write(`x${game.comboMultiplier().toFixed(1)}`, viewSize[X]-85, 100);  
+
+    smoothScore = Math.min(gs.score, smoothScore + Math.max((gs.score - smoothScore)/10,dTime*10))
+    write(`${smoothScore.toFixed()}`, viewSize[X]/2, 40);  
+
+    cx2d.textAlign="right";
+
+    cx2d.font = "bold 16pt Courier";
+    write(`speed`, viewSize[X]-10, 200);  
+    write(`clean city`, viewSize[X]-10, 250);  
+
+    cx2d.font = "bold 20pt Courier";
+    write(`x${game.speedMultiplier().toFixed(1)}`, viewSize[X]-10, 220);  
+    write(`x${game.cleanCityMultiplier().toFixed(1)}`, viewSize[X]-10, 270);  
+  }
+
+  cx2d.font = "bold 32pt Courier";
+  for(let n of notifications){
+    write(n.text, n.at[X], n.at[Y]);
+    n.at[Y] -= dTime*300;
+  }  
+
+  I.innerHTML = `cs ${gs.consuming} ${gs.consumingStage} ${game.relativeTimeout()} combo ${gs.combo} debris left ${gs.debrisLeft} speed bonus ${game.speedMultiplier()} timeout ${gs.timeout} timeout speed ${gs.timeoutSpeed} `;
+
+  let time = gs.time;
   let [camera, perspective, look] = m4.viewMatrices(
-    v3.sum(v3.sum(state.at, v3.scale(state.dir, -5)), [0, 0, 0]),
-    state.dir,
+    v3.sum(v3.sum(gs.at, v3.scale(gs.dir, -5)), [0, 0, 0]),
+    gs.dir,
     viewSize,
     PI / 4,
-    [4, cityDepth + dist(state.at, [0, cityDepth * 0.5, 0])]
+    [4, cityDepth + dist(gs.at, [0, cityDepth * 0.5, 0])]
     //[4, 5000]
   );
+
+  
   let invCamera = m4.inverse(camera);
 
-  let flyer = m4.lookTo(state.at, state.dir, [0, 0, 1]);
-  flyer = m4.multiply(flyer, m4.axisRotation([0, 0, 1], -(state.smoothDrot[X]) * Math.PI / 4 / 100));
-  flyer = m4.multiply(flyer, m4.axisRotation([1, 0, 0], -(state.smoothDrot[Y]) * Math.PI / 4 / 200));
+  let flyer = m4.lookTo(gs.at, gs.dir, [0, 0, 1]);
+  flyer = m4.multiply(flyer, m4.axisRotation([0, 0, 1], -(gs.smoothDrot[X]) * Math.PI / 4 / 100));
+  flyer = m4.multiply(flyer, m4.axisRotation([1, 0, 0], -(gs.smoothDrot[Y]) * Math.PI / 4 / 200));
 
   let screenCrashPoints = crashPoints.map(p => {
     let a = m4.transform(camera, m4.transform(flyer, p));
@@ -76,7 +128,12 @@ export function frame(state: game.State,
 
   gl.useProgram(pMain);
 
-  g0.setUniforms(pMainUniform, { camera, flyer, sun: [0, cityDepth, 0], time })
+  g0.setUniforms(pMainUniform, {
+    camera, flyer, sun: [0, cityDepth, 0], time,
+    "liveDebris[0]": gs.liveDebris,
+    consuming: gs.consuming,
+    consumingStage: gs.consumingStage
+  })
 
   gl.bindFramebuffer(gc.FRAMEBUFFER, framebuffer);
   gl.clear(gc.DEPTH_BUFFER_BIT | gc.COLOR_BUFFER_BIT);
@@ -102,12 +159,16 @@ export function frame(state: game.State,
   gl.useProgram(pScreen);
   g0.setUniforms(pScreenUniform, {
     invCamera, flyer, time, invPerspective: m4.inverse(perspective),
+    timeout: game.relativeTimeout(),
+    viewSize : [viewSize[X], viewSize[Y], 0],
     scp0: screenCrashPoints[0], scp1: screenCrashPoints[1], scp2: screenCrashPoints[2]
   })
 
   g0.bindTextures(textures, [pScreenUniform.T0, pScreenUniform.T1, pScreenUniform.Depth]);
   gl.bindFramebuffer(gc.FRAMEBUFFER, null);
-  gl.drawArrays(gc.TRIANGLES, 0, 6)
+  gl.drawArrays(gc.TRIANGLES, 0, 6);
+
+  gl.flush();
 
   //console.log(`Rendered in ${Date.now() - startTime} ms`);
 }

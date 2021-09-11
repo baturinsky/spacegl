@@ -2,8 +2,13 @@ uniform mat4 camera;
 uniform mat4 flyer;
 uniform vec3 sun;
 uniform float time;
+uniform int consuming;
+uniform float consumingStage;
+
+uniform int liveDebris[32];
 
 in vec3 at;
+in vec3 up;
 in vec3 norm;
 in vec3 cell;
 in vec4 type;
@@ -47,19 +52,29 @@ void main() {
   vtype = ivec4(type);
   vshape = int(shape);
 
-  vec4 at4 = vec4(at, 1.);
+  vec4 at4 = vec4(at+up*0., 1.);
 
   vcolor.rgb = vec3(1.);
 
   if(vtype.x == 9) {
-    vcolor.rgb = vec3(1.,0.,1.);
-    float a = rand(shape);
-    vec3 axis = normalize(vec3(rand(a+1.), rand(a+2.), rand(a+3.)));
-    //vec3 axis = vec3(1.,0.,0.);   
-    light -= a*0.3; 
-    at4 = axisRotation(axis, time * 5e-3 * (.5+rand(a+4.)) + rand(a+4.) ) * at4;
-    at4.xyz += 15. * (vec3(rand(a+5.), rand(a+6.), rand(a+7.)) - .5);
-    at4.xyz += vec3(vtype.yzw);
+    int swarm = vshape/32;
+    bool live = (liveDebris[swarm/30] & (1 << swarm%30)) != 0;
+    if(live || consuming == swarm){
+      vcolor.rgb = vec3(1.,0.,1.);
+      float a = rand(shape);
+      vec3 axis = normalize(vec3(rand(a+1.), rand(a+2.), rand(a+3.)));
+      light -= a*0.3; 
+      mat4 rot = axisRotation(axis, time * 5. * (.5+rand(a+4.)) + rand(a+4.) );
+      vnorm = normalize((rot * vec4(norm, 1.)).xyz);
+      at4 = rot * at4;
+      at4.xyz += 25. * (vec3(rand(a+5.), rand(a+6.), rand(a+7.)) - .5);
+      at4.xyz += vec3(vtype.yzw);
+      at4.xyz += up * sin(float(swarm) + time*0.1) * 20.;
+      if(consuming == swarm)
+        at4.xyz = mix(at4.xyz, flyer[3].xyz, consumingStage);
+    } else {
+      at4 = vec4(1e6);
+    }
   }
 
   //int si = int(shape);
@@ -85,8 +100,11 @@ void main() {
       vnorm.y = -vnorm.y;
       at4.y = -at4.y;
     }
-    float shift = fract(fract(float(id) / 1e2) + time * 1e-5 * (id % 2 == 1 ? 3. : -3.));
+    float shift = fract(fract(float(id) / 1e2) + time * 1e-2 * (id % 2 == 1 ? 3. : -3.));
     at4.y = at4.y + 7300. - pow(shift * 120., 2.);
+    if(at4.y<0.){
+      at4.xz += vec2(rand(float(id))-.5,rand(float(id+1))-.5) * pow(at4.y/1e2,2.) ;
+    }
   }
 
   vec4 pos;

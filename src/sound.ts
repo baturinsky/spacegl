@@ -1,7 +1,11 @@
 import { rangef, PI, PIH, PI2, RNG } from "./g0/misc";
 
 let ax: AudioContext;
-export let sampleRate = 44100, frequency = 440;
+export let sampleRate = 44100, frequency = 440, volume = 1;
+
+export function setVolume(v:number){
+  volume = v;
+}
 
 export function init() {
   ax = ax || new window.AudioContext()
@@ -13,12 +17,16 @@ export function soundBuf(samples: number[][]) {
   return buffer;
 }
 
-export function play(buffer: AudioBuffer) {
+export function playBuf(buffer: AudioBuffer, loop=false) {
   const source = ax.createBufferSource();
   source.buffer = buffer;
-  source.connect(ax.destination);
+  let gain = ax.createGain();
+  gain.gain.value = 0;
+  gain.connect(ax.destination);
+  source.connect(gain);
+  source.loop = loop;
   source.start();
-  return source;
+  return gain;
 }
 
 export const sin = (t: number) => Math.sin(t);
@@ -27,13 +35,13 @@ export const beat = (t: number) => Math.sin(t * 1e9 % 1);
 
 export const noise = (t: number) => Math.random();
 
-export const brown = (a: number = 0.02, b: number = 0.1) => {
+export const brown = (freq: number = 0.02, vol: number = 0.1) => {
   let bl = 0;
-  return (t: number) => {
+  return () => {
     var white = Math.random() * 2 - 1;
-    let v = (bl + (a * white)) / (1 + a);
+    let v = (bl + (freq * white)) / (1 + freq);
     bl = v;
-    v *= b / a;
+    v *= vol / freq;
     return v;
   }
 }
@@ -55,10 +63,11 @@ export const onenote = (...args: [(n: number) => number, (n: number) => number, 
 export const key = (n: number) => 2 ** (n / 12) * 440
 
 let tone: AudioBuffer;
-export function play1() {
-  tone = tone || soundBuf(rangef(1, n => soundArr(ding, pitch(key(~~(n / 3) - (n % 3) * 12), sin))))
-  //tone = tone || onenote(ding, brown());
-  play(tone);
+export function playNoise() {
+  //tone = tone || soundBuf(rangef(1, n => soundArr(ding, pitch(key(~~(n / 3) - (n % 3) * 12), sin))))
+  //tone = soundBuf([rangef(200000,brown(0.02, 0.01))]);
+  tone = soundBuf([rangef(200000,brown(0.02, 0.01))]);
+  return playBuf(tone, true);
 }
 
 const withCounter = (f: Function) => {
@@ -139,9 +148,9 @@ export function play2() {
   })
 }
 
-export function node(note: number, dur = 3) {
+export function node(note: number, dur = 3, vol=1) {
   let [o, g] = og();
-  g.gain.setValueAtTime(440 / key(note), ax.currentTime);
+  g.gain.setValueAtTime(volume * vol * 44 / key(note), ax.currentTime);
   o.frequency.setValueAtTime(key(note), ax.currentTime);
   g.gain.exponentialRampToValueAtTime(1e-5, ax.currentTime + dur);
   o.stop(ax.currentTime + dur)

@@ -16,10 +16,10 @@
     let rngi = (n) => {
       return (seed = seed * 16807 % 2147483647) % n;
     };
-    let rng2 = (n) => {
+    let rng4 = (n) => {
       return n == -1 ? seed : n == null ? rngi(maxN) / maxN : rngi(n);
     };
-    return rng2;
+    return rng4;
   }
   function dictMap(a, f) {
     let res = {};
@@ -37,6 +37,7 @@
   // src/g0/v3.ts
   var axis = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
   var len = (v4) => (v4[X] * v4[X] + v4[Y] * v4[Y] + v4[Z] * v4[Z]) ** 0.5;
+  var dist = (v4, w) => len(sub(v4, w));
   var scale = (v4, n) => [v4[X] * n, v4[Y] * n, v4[Z] * n];
   var norm = (v4, l = 1) => scale(v4, l / len(v4));
   var mul = (v4, w) => v4[X] * w[X] + v4[Y] * w[Y] + v4[Z] * w[Z];
@@ -48,7 +49,7 @@
 
   // src/g0/v.ts
   var len2 = (v4) => mul2(v4, v4) ** 0.5;
-  var dist = (v4, w) => len2(sub2(v4, w));
+  var dist2 = (v4, w) => len2(sub2(v4, w));
   var scale2 = (v4, n) => v4.map((x) => x * n);
   var mul2 = (v4, w) => v4.reduce((s, x, i) => s + x * w[i], 0);
   var sum2 = (v4, w) => v4.map((x, i) => x + w[i]);
@@ -296,8 +297,8 @@
     let l = shapes.length;
     let faceCount = addUp(shapes.map((s) => s.faces));
     let vertCount = addUp(shapes.map((s) => s.verts));
-    let faces = new Uint32Array(faceCount[l] * 3);
-    let verts = dictMap(attrs, (v4) => {
+    let faceBuf = new Uint32Array(faceCount[l] * 3);
+    let vertBufs = dictMap(attrs, (v4) => {
       if (v4[ATTRTYPE] && v4[ATTRTYPE] != FLOAT) {
         return new Int32Array(vertCount[l] * v4[ATTRSIZE]);
       } else {
@@ -308,35 +309,29 @@
     shapes.forEach((shape3, shapei) => {
       for (let face of shape3.faces) {
         const vShift = vertCount[shapei];
-        faces[f++] = face[0].ind + vShift;
-        faces[f++] = face[1].ind + vShift;
-        faces[f++] = face[2].ind + vShift;
+        faceBuf[f++] = face[0].ind + vShift;
+        faceBuf[f++] = face[1].ind + vShift;
+        faceBuf[f++] = face[2].ind + vShift;
       }
     });
-    for (let bufName in verts) {
+    for (let bufName in vertBufs) {
       let size = attrs[bufName][ATTRSIZE];
-      let buf = verts[bufName];
+      let buf = vertBufs[bufName];
       let i = 0;
-      if (size == 1) {
-        for (let shape3 of shapes) {
-          for (let vert of shape3.verts) {
-            if (vert[bufName])
-              buf[i] = vert[bufName];
-            i++;
-          }
+      for (let shape3 of shapes) {
+        let base = shape3.common ? shape3.common[bufName] : null;
+        for (let vert of shape3.verts) {
+          let value = vert[bufName] || base;
+          if (value)
+            if (size == 1)
+              buf[i] = value;
+            else
+              buf.set(value, i * size);
+          i++;
         }
-      } else {
-        for (let shape3 of shapes) {
-          for (let vert of shape3.verts) {
-            if (vert[bufName])
-              buf.set(vert[bufName], i * size);
-            i++;
-          }
-        }
-        ;
       }
     }
-    return {faces, verts};
+    return {faces: faceBuf, verts: vertBufs};
   }
   function mesh(cols, rows, shader2) {
     let faces = new Array(cols * rows * 2), verts = new Array((cols + 1) * (rows + 1));
@@ -378,7 +373,7 @@
   }));
   var smoothPolyFixed = (curve, gap) => flat(curve.map((v4, i) => {
     let w = curve[(i + 1) % curve.length];
-    let d = dist(v4, w);
+    let d = dist2(v4, w);
     let g = gap / d;
     return [lerp(v4, w, g), lerp(v4, w, 1 - g)];
   }));
@@ -395,10 +390,6 @@
   function reflect(shape3, norm2) {
     transformShape(shape3, reflection(norm2));
     invert(shape3);
-  }
-  function setType(s, f) {
-    for (let v4 of s.verts)
-      v4.type = f(v4);
   }
   function quad(verts) {
     return {faces: [[verts[1], verts[2], verts[3]], [verts[0], verts[1], verts[3]]], verts};
@@ -471,21 +462,28 @@ ${body}`;
       gl.bindTexture(TEXTURE_2D, textures3[i].texture);
     }
   }
-  var uniformTypes = {[INT]: "i", [UNSIGNED_INT]: "ui", [FLOAT]: "f", [FLOAT_VEC3]: "f", [FLOAT_MAT4]: "Matrix4fv"};
+  var uniformTypes = {
+    [INT]: "i",
+    [UNSIGNED_INT]: "ui",
+    [FLOAT]: "f",
+    [FLOAT_VEC3]: "f",
+    [FLOAT_MAT4]: "Matrix4fv"
+  };
   function uniforms(p) {
     const u = {};
     for (let i = 0; i < gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS); ++i) {
       const info = gl.getActiveUniform(p, i);
+      console.log(info);
       let suffix = uniformTypes[info.type] || "i";
       const loc = gl.getUniformLocation(p, info.name);
-      if (suffix.indexOf("Matrix") >= 0)
-        u[info.name] = (...args) => gl[`uniform${suffix}`](loc, false, ...args);
-      else
-        u[info.name] = (...args) => {
-          if (args[0].length > 0)
-            args = args[0];
-          gl[`uniform${args.length}${suffix}`](loc, ...args);
-        };
+      let f = info.size > 1 ? (args) => {
+        gl[`uniform1${suffix}v`](loc, args);
+      } : suffix.indexOf("Matrix") >= 0 ? (args) => gl[`uniform${suffix}`](loc, false, args) : (...args) => {
+        if (args[0].length > 0)
+          args = args[0];
+        gl[`uniform${args.length}${suffix}`](loc, ...args);
+      };
+      u[info.name] = f;
     }
     return u;
   }
@@ -518,8 +516,8 @@ ${body}`;
       setDatabuffer(buffers.verts[k], elements.verts[k]);
   }
   function setAttrDatabuffers(buffers, prog) {
-    for (let key in buffers.verts)
-      attr(prog, key, buffers.verts[key], buffers.attrs[key][ATTRSIZE], buffers.attrs[key][ATTRTYPE] || FLOAT);
+    for (let key2 in buffers.verts)
+      attr(prog, key2, buffers.verts[key2], buffers.attrs[key2][ATTRSIZE], buffers.attrs[key2][ATTRTYPE] || FLOAT);
   }
   function putShapesInElementBuffers(shapes, attrs) {
     let elements = shapesToElements(shapes, attrs);
@@ -580,42 +578,60 @@ ${body}`;
   var citySize = cityCols * cityRows;
   var cityDepth = cityRows * cityRowGap;
   var cityColGap = cityRadius * PI2 / cityCols;
+  var ShipsNumber = 150;
+  var MaxDebris = 30 * 64;
   function initGeometry() {
-    let rng2 = RNG(1);
-    let buildings = generateCity(rng2);
-    let solid = buildings.slice();
+    let rng4 = RNG(1);
+    let buildings = generateCity(rng4);
+    let solid = buildings.filter((b) => b);
+    let tunnel = tunnelGeometry(rng4, 72, cityRadius, cityRadius * 1.3, cityRows * cityRowGap);
+    ts(tunnel, axisRotation(axis[X], -Math.PI / 2));
+    solid.push(tunnel);
     let passable = [];
     let flyer = flyerGeometry();
     passable.push(flyer);
-    for (let i2 = 0; i2 < 150; i2++) {
-      let ship = shipGeometry(rng2, i2);
+    for (let i2 = 0; i2 < ShipsNumber; i2++) {
+      let ship = shipGeometry(rng4, i2);
       let sector = i2 % 6;
-      ts(ship, axisRotation([0, 1, 0], PIH + (sector < 3 ? PI : 0)), scaling(rng2(5) + 2), translation([0, 0, cityRadius * (0.35 + rng2() * 0.15)]), axisRotation([0, 1, 0], sector * PI2 / 6 + PI2 * 5 / 12 + rng2() * 0.2 - 0.1));
+      ts(ship, axisRotation([0, 1, 0], PIH + (sector < 3 ? PI : 0)), scaling(rng4(5) + 2), translation([0, 0, cityRadius * (0.35 + rng4() * 0.15)]), axisRotation([0, 1, 0], sector * PI2 / 6 + PI2 * 5 / 12 + rng4() * 0.2 - 0.1));
       solid.push(ship);
     }
-    for (let d = 0; d < buildings.length; d++) {
-      let pos = lastOf(buildings[d].verts).at;
-      for (let i2 = 0; i2 < 20; i2++) {
-        let size = rng2() * 3 + 1;
-        let junk = quad(vertsAt([
+    let debris = [];
+    while (debris.length < MaxDebris) {
+      let building = buildings[rng4(buildings.length)];
+      if (building && building.height * rng4() < building.density && building.density > 0.4) {
+        let score = ~~((building.density / (building.height + 10) * 400) ** 2 + 1);
+        let at = lastOf(building.verts).at;
+        let up = sub(at, building.verts[building.verts.length - 2].at);
+        let d = {ind: debris.length, at, up, live: true, score};
+        debris.push(d);
+      }
+    }
+    debris.forEach((debris2, ind) => {
+      for (let i2 = 0; i2 < 32; i2++) {
+        let size = rng4() * 3 + 1;
+        let debrisShape = quad(vertsAt([
           [-size / 2, -size / 2, 0],
           [-size / 2, size, 0],
           [size / 2, size / 2, 0],
           [size / 2, -size / 2, 0]
         ]));
-        setType(junk, () => [DEBRIS, ...pos]);
-        passable.push(junk);
+        debrisShape.common = {
+          type: [DEBRIS, ...debris2.at],
+          shape: debris2.ind * 32 + i2,
+          up: debris2.up
+        };
+        passable.push(debrisShape);
       }
-    }
+    });
     let i = 0;
     for (let s of [...solid, ...passable]) {
       i++;
       calculateFlatNormals(s);
-      for (let v4 of s.verts) {
-        v4.shape = i;
-      }
+      s.common = s.common || {};
+      s.common.shape = s.common.shape || i;
     }
-    return [solid, passable];
+    return [solid, passable, debris];
   }
   function flyerGeometry() {
     let wing = towerMesh(smoothPolyFixed([[0, -4], [6, -5], [0, 4], [-6, -5]], 2), [[0, 0], [0.8, 0], [1, 0.5], [1, 1], [0.8, 1.1], [0, 1.1]]);
@@ -628,25 +644,20 @@ ${body}`;
     let body = towerMesh(smoothPolyFixed([[1, -4], [1, 7], [0, 10], [-1, 7], [-1, -4]], 1), [[0, 1], [0.8, 1], [1, 2], [1, 3], [0.4, 4], [0, 4]]);
     ts(body, translation([0, 2, 3.5]));
     let flyer = combine2([body, wing, engine, engine2]);
-    setType(flyer, (v4) => [FLYER, 0, 0, 0]);
+    flyer.common = {type: [FLYER, 0, 0, 0]};
     ts(flyer, scaling(0.2), axisRotation([0, -1, 0], Math.PI), axisRotation([-1, 0, 0], Math.PI / 2), translation([0, 2, 0]));
     return flyer;
   }
-  function generateCity(rng2) {
-    let shapes = [];
-    let buildings = generateBuildings(rng2);
+  function generateCity(rng4) {
+    let buildings = generateBuildings(rng4);
     tunnelCity(buildings);
-    buildings.forEach((b) => b && shapes.push(b));
-    let tunnel = tunnelGeometry(rng2, 72, cityRadius, cityRadius * 1.3, cityRows * cityRowGap);
-    ts(tunnel, axisRotation(axis[X], -Math.PI / 2));
-    shapes.push(tunnel);
-    return shapes;
+    return buildings;
   }
-  function tunnelGeometry(rng2, divs, r1, r2, h) {
+  function tunnelGeometry(rng4, divs, r1, r2, h) {
     let circle2 = circle(divs);
     let horns = [];
     for (let i = 0; i < divs - 1; i++) {
-      let hh = rng2() * 1e3;
+      let hh = rng4() * 1e3;
       let choke = i / divs * 6 % 1 < 0.5 ? 0.8 : 1;
       let horn = towerMesh([
         scale2(circle2[i], r1),
@@ -661,22 +672,21 @@ ${body}`;
       if (v4.cell[Y] == 0)
         v4.type = [WARPER, 0, 0, 0];
     let combined = combine2([warper, ...horns]);
-    setType(combined, (v4) => v4.type || [TUNNEL, 0, 0, 0]);
+    combined.common = {type: [TUNNEL, 0, 0, 0]};
     return combined;
   }
-  function roundTower2(rng2, r, i, height) {
+  function roundTower2(rng4, r, i, height, simple) {
     let slice, curve, types;
-    let simple = rng2(4);
     if (simple) {
-      [curve, types] = generateBuildingCurve(rng2, height / 2, r * (0.5 + rng2() * 0.4), true);
+      [curve, types] = generateBuildingCurve(rng4, height, r * (0.5 + rng4() * 0.4), true);
       slice = [[1, 1], [-1, 1], [-1, -1], [1, -1]];
     } else {
-      let sectors = rng2(4) + 4;
-      [curve, types] = generateBuildingCurve(rng2, height, r);
+      let sectors = rng4(4) + 4;
+      [curve, types] = generateBuildingCurve(rng4, height, r);
       slice = rangef(sectors, (a) => revolutionShader(sectors, PIQ)(a));
-      if (!rng2(3))
+      if (!rng4(3))
         slice = smoothPoly(slice, 0.1);
-      if (rng2(4) == 0)
+      if (rng4(4) == 0)
         slice.forEach((v4) => v4[Y] += 0.95);
     }
     let building = twoCurvesMesh(slice, curve, towerShader);
@@ -685,34 +695,47 @@ ${body}`;
     }
     return building;
   }
-  function generateBuildings(rng2) {
+  function densityIn(i) {
+    let a = i % cityCols / cityCols * PI2;
+    let s = Math.sin(a * 6 + PI / 2);
+    let density = Math.min(1.4 - Math.abs(0.5 - i / citySize) * 3, s * 0.5 + 1);
+    return density;
+  }
+  function generateBuildings(rng4) {
     let buildings = new Array(citySize), heights = new Array(citySize);
     for (let i = 0; i < citySize; i++) {
       if (heights[i])
         continue;
-      let extend = [rng2(4) ? 0 : rng2(3), rng2(4) ? 0 : rng2(3)];
-      let a = i % cityCols / cityCols * PI2;
-      let s = Math.sin(a * 6 + PI / 2);
-      let density = Math.min(1.4 - Math.abs(0.5 - i / citySize) * 3, s * 0.5 + 1);
-      let h = 0;
-      if (density > rng2() * 0.3) {
-        let r = 30 + rng2(10);
-        if (!rng2(10) && s > 0)
+      let extend = [rng4(4) ? 0 : rng4(3), rng4(4) ? 0 : rng4(3)];
+      let height = 0;
+      let slots = [];
+      for (let x = 0; x <= extend[X]; x++)
+        for (let y = 0; y <= extend[Y]; y++)
+          slots.push(i + x + y * cityCols);
+      let density = 1e6;
+      for (let s of slots)
+        density = Math.min(density, densityIn(s));
+      if (density > rng4() * 0.3) {
+        let r = 30 + rng4(10);
+        if (!rng4(10))
           r *= 1.2;
         r = Math.min(18, r);
-        h = density * 20 * (8 + rng2(10));
-        let building = roundTower2(rng2, r * (0.5 + rng2() * 0.5), i, h / r);
+        height = Math.min(density * 300, 3 + density * 20 * (8 + rng4(10)));
+        let simple = rng4(4) != 0;
+        if (simple)
+          height /= 2;
+        let building = roundTower2(rng4, r * (0.5 + rng4() * 0.5), i, height / r, simple);
         r *= 1 - (0.1 + extend[X] + extend[Y]);
         buildings[i] = building;
-        heights[i] = h;
+        heights[i] = height;
         building.extend = extend;
-        building.height = h;
-        if (extend[X] > 1 || extend[Y] > 1) {
-          for (let x = 0; x <= extend[X]; x++)
-            for (let y = 0; y <= extend[Y]; y++)
-              heights[i + x + y * cityCols] = h;
-        }
-        building.verts.push({at: [0, 0, h + 5], ind: building.verts.length});
+        building.height = height;
+        building.density = density;
+        for (let s of slots)
+          heights[s] = height;
+        let poiH = height + rng4() * 10 + 30;
+        building.verts.push({at: [0, 0, poiH - 1], ind: building.verts.length});
+        building.verts.push({at: [0, 0, poiH], ind: building.verts.length});
       }
     }
     return buildings;
@@ -733,22 +756,22 @@ ${body}`;
   }
   var HM = 0;
   var VM = 1;
-  function generateWindows(rng2) {
-    let gaps = [rng2(6) + 2, rng2(6) + 2, rng2(6), rng2(6)];
-    let windowDensity = [(rng2() + 0.3) / 4, rng2() + 0.3];
+  function generateWindows(rng4) {
+    let gaps = [rng4(6) + 2, rng4(6) + 2, rng4(6), rng4(6)];
+    let windowDensity = [(rng4() + 0.3) / 4, rng4() + 0.3];
     return [gaps, windowDensity];
   }
-  function generateBuildingCurve(rng2, height, r, simple = false) {
+  function generateBuildingCurve(rng4, height, r, simple = false) {
     let [x, y] = [1, 0];
     let curve = [[x * r, 0]];
     let types = [];
     let w = 2, b = 0;
-    let [gaps, windowDensity] = generateWindows(rng2);
+    let [gaps, windowDensity] = generateWindows(rng4);
     while (y < height) {
-      let dx = w > 1 ? 0 : x * (0.1 + rng2() * 0.5) * (rng2(4) ? -1 : 1);
+      let dx = w > 1 ? 0 : x * (0.1 + rng4() * 0.5) * (rng4(4) ? -1 : 1);
       if (x + dx > 1 || x + dx < 0.3)
         dx = -dx;
-      let dy = simple ? height : (w > 0 ? 1 : 0) * (rng2() * 0.5 * (height * 1.1 - y));
+      let dy = simple ? height : (w > 0 ? 1 : 0) * (rng4() * 0.5 * (height * 1.1 - y));
       if (y < 5 && dy > 0)
         dy++;
       x += dx;
@@ -767,28 +790,28 @@ ${body}`;
         hexFromDigits(gaps),
         windowArea * 256
       ]);
-      let nw = rng2(3);
+      let nw = rng4(3);
       w = nw == 0 && w == 0 ? 2 : nw;
     }
     curve.push([0, y * r]);
     types.push([BUILDING, 2056, 57344, 0]);
     return [curve, types];
   }
-  function generateShipPart(rng2, bends, bounds, curve) {
-    let sides = [rng2() * bounds[Y][0], rng2() * bounds[Y][1]];
+  function generateShipPart(rng4, bends, bounds, curve) {
+    let sides = [rng4() * bounds[Y][0], rng4() * bounds[Y][1]];
     let x = bounds[0][X];
     let slices = [[[x, sides[X]]], [[x, sides[Y]]]];
     let step = (bounds[X][1] - bounds[X][0]) / (bends[0] + bends[1]);
     if (step < 0)
       return;
     for (let i = 0; i < 20; i++) {
-      x = x + rng2() * step * 2;
+      x = x + rng4() * step * 2;
       if (x > bounds[X][1])
         x = bounds[X][1];
-      if (rng2() < bends[0] / (bends[0] + bends[1]))
-        sides[0] = rng2() * bounds[Y][0];
-      if (rng2() < bends[1] / (bends[0] + bends[1]))
-        sides[1] = rng2() * bounds[Y][1];
+      if (rng4() < bends[0] / (bends[0] + bends[1]))
+        sides[0] = rng4() * bounds[Y][0];
+      if (rng4() < bends[1] / (bends[0] + bends[1]))
+        sides[1] = rng4() * bounds[Y][1];
       slices[0].push([x, sides[0]]);
       slices[1].push([x, sides[1]]);
       if (x >= bounds[X][1])
@@ -799,15 +822,15 @@ ${body}`;
     let slice = smoothPoly([...slices[0], ...slices[1].reverse()].map((v4) => [v4[0], v4[1] / 2]), 0.1);
     return coveredTowerMesh(slice, curve);
   }
-  function shipGeometry(rng2, id) {
-    let hullLength = 5 + rng2(15);
-    let hullWidth = 0.5 + rng2();
-    let hullHeight = 0.5 + rng2();
-    let wingWidth = 0.1 + rng2() * 3;
-    let wing1 = generateShipPart(rng2, [rng2(4) + 1, rng2(4) + 1], [[0, hullWidth + 1 + rng2(5)], [-2 - rng2() * hullLength / 3, 6 + rng2() * hullLength / 2]], [[1, 0], [1.5, wingWidth * 0.33], [1.5, wingWidth * 0.66], [1, wingWidth]]);
+  function shipGeometry(rng4, id) {
+    let hullLength = 5 + rng4(15);
+    let hullWidth = 0.5 + rng4();
+    let hullHeight = 0.5 + rng4();
+    let wingWidth = 0.1 + rng4() * 3;
+    let wing1 = generateShipPart(rng4, [rng4(4) + 1, rng4(4) + 1], [[0, hullWidth + 1 + rng4(5)], [-2 - rng4() * hullLength / 3, 6 + rng4() * hullLength / 2]], [[1, 0], [1.5, wingWidth * 0.33], [1.5, wingWidth * 0.66], [1, wingWidth]]);
     let wing2 = clone(wing1);
     reflect(wing2, [1, 0, 0]);
-    let body = generateShipPart(rng2, [rng2(3) + 1, rng2(3) + 1], [[-3, hullLength], [-4 * hullHeight, 4 * hullHeight]], [[1, -2 * hullWidth], [1.5, -1 * hullWidth], [1.5, 1 * hullWidth], [1, 2 * hullWidth]]);
+    let body = generateShipPart(rng4, [rng4(3) + 1, rng4(3) + 1], [[-3, hullLength], [-4 * hullHeight, 4 * hullHeight]], [[1, -2 * hullWidth], [1.5, -1 * hullWidth], [1.5, 1 * hullWidth], [1, 2 * hullWidth]]);
     ts(body, axisRotation([0, 0, -1], PIH), axisRotation([0, 1, 0], PIH));
     let ship = combine2([body, wing1, wing2]);
     for (let v4 of ship.verts)
@@ -819,17 +842,228 @@ ${body}`;
   var fMain_default = "uniform float time;\nuniform float pass;\n\nin vec3 vcell;\nin vec3 vat;\nin float dist;\n\nflat in float light;\nflat in vec3 vnorm;\nflat in vec4 vcolor;\n\nflat in ivec4 vtype;\nflat in int vshape;\n\nlayout(location = 0) out vec4 c0;\nlayout(location = 1) out vec4 c1;\n\nfloat hexDigitF(int n, int place) {\n  return float((n >> (place * 4)) & 15) / 15.;\n}\n\nint hex2Digit(int n, int place) {\n  return (n >> (place * 8)) % 256;\n}\n\nvoid main() {\n  //vec4 worldAt = \n  int itype = vtype.x;\n  int t1 = vtype.y;\n  int t2 = vtype.z;\n  float bright = light;\n  //vt = 2.0101000000;\n  if(itype == 2) {\n    float hm = hexDigitF(t2, 0);\n    float vm = hexDigitF(t2, 1);\n    float x = fract(vcell.x);\n    float y = fract(vcell.y);\n\n    float far = 0., near = 0.;\n\n    if(dist >= 500.) {\n      //bright *= float(vtype.a)/256.;\n      far = x > hm &&\n        x < 1. - hm &&\n        y > vm &&\n        y < 1. - vm ? -float(vtype.a) / 256. : .0;\n    }\n\n    if(dist <= 700.) {\n      float cols = float(hex2Digit(t1, 1));\n      float rows = float(hex2Digit(t1, 0));\n      float hb = hexDigitF(t2, 2);\n      float vb = hexDigitF(t2, 3);\n      near = x > hm &&\n        x < 1. - hm &&\n        y > vm &&\n        y < 1. - vm &&\n        (cols == 1. || fract((x - hm) / (1. - hm * 2.) * cols) > hb) &&\n        (rows == 1. || fract((y - vm) / (1. - vm * 2.) * rows) > vb) ? -1. : .0;\n    }\n\n    float l = clamp((dist - 500.) / 200., 0., 1.);\n    bright += mix(near, far, l);\n\n  } else if(itype == 4) {\n    bright += vat.z * 5e-4 + (fract(vat.y / 40. + 0.55) < .1 || fract(atan(vat.x, vat.z) / 3.141 * 36. + 0.45) < .1 ? -1. : 0.);\n  } else if(itype == 5) {\n    bright = 2.;\n  }\n\n  if(itype == 7) {\n    float y = fract(vcell.y);\n    bright += y < 0.03 || y > 0.97 || y>0.49 && y<0.51/* || mod(vcell.x,3. + sin(floor(vcell.y)*100.)) < 0.03*/? -.5 : .0;\n  }\n\n  if(bright > 0.)\n    bright += vcell.y * 0.05 - 0.3;\n  /*if(mod(vcell.x,0.2)<0.1 != mod(vcell.y,0.2)<0.1)\n    light /= 2.;*/\n  //c0 = vec4(light, 0., 0., 1.);\n  c0 = vec4(vcolor.rgb * bright, vcolor.a);\n  //c1 = vec4(gl_FrontFacing?0.:1.,0.,0.,0.);\n  //c1 = vec4(vat / 1000. + 0.5, 1.);\n  //c1 = vec4(1.,0.,0.,1.);\n  //if(pass == 0.)\n  //c1 = vec4(gl_FragCoord.xyz * gl_FragCoord.w, 1.);\n  //c1 = vec4(vnorm, 1.);\n  c1 = vec4(vnorm*0.5+0.5, gl_FragCoord.z * gl_FragCoord.w);\n}\n";
 
   // src/shaders/fScreen.glsl
-  var fScreen_default = "uniform sampler2D T0;\nuniform sampler2D T1;\nuniform sampler2D Depth;\nuniform mat4 invCamera;\nuniform mat4 invPerspective;\nuniform mat4 flyer;\nuniform vec3 scp0;\nuniform vec3 scp1;\nuniform vec3 scp2;\n\nin vec2 uv;\n\nout vec4 color;\n\nfloat Noise2d(in vec2 x) {\n  float xhash = cos(x.x * 37.0);\n  float yhash = cos(x.y * 57.0);\n  return fract(415.92653 * (xhash + yhash));\n}\n\nint b16[16] = int[] (1, 9, 3, 11, 13, 5, 15, 7, 4, 12, 2, 10, 16, 8, 14, 6);\nint b64[64] = int[] (1, 33, 9, 41, 3, 35, 11, 43, 49, 17, 57, 25, 51, 19, 59, 27, 13, 45, 5, 37, 15, 47, 7, 39, 61, 29, 53, 21, 63, 31, 55, 23, 4, 36, 12, 44, 2, 34, 10, 42, 52, 20, 60, 28, 50, 18, 58, 26, 16, 48, 8, 40, 14, 46, 6, 38, 64, 32, 56, 24, 62, 30, 54, 22);\n\nfloat dither(float v, ivec2 F) {\n  return v * 75. > float(b64[F.y % 8 * 8 + F.x % 8]) ? 1. : 0.;\n}\n\nconst bool ditherOn = true;\nconst float collisionDepth = 0.6;\n\nvoid main() {\n\n  ivec2 F = ivec2(gl_FragCoord.xy);\n\n  float depth = texelFetch(Depth, F, 0).r;\n  color = vec4(1.);\n\n  vec4 screenPos = vec4(uv.x, -uv.y, depth * 2. - 1., 1.);\n\n  vec4 pos4 = invCamera * screenPos;\n  vec3 pos = (pos4 / pos4.w).xyz - flyer[3].xyz;\n\n  /*if(distance(vec2(scp0.x, scp0.y), vec2(F)) < 10.) {\n    color = vec4(1., 0., 0., 1.);\n    return;\n  }\n\n  if(distance(vec2(scp1.x, scp1.y), vec2(F)) < 10.) {\n    color = vec4(0., 1., 0., 1.);\n    return;\n  }\n\n  if(distance(vec2(scp2.x, scp2.y), vec2(F)) < 10.) {\n    color = vec4(0., 0., 1., 1.);\n    return;\n  }*/\n\n  if(F.y < 4 && F.x < 4) {\n    color = vec4(\n      texelFetch(Depth, ivec2(scp0.xy), 0).r < collisionDepth ? 1. : 0., \n      texelFetch(Depth, ivec2(scp1.xy), 0).r < collisionDepth ? 1. : 0., \n      texelFetch(Depth, ivec2(scp2.xy), 0).r < collisionDepth ? 1. : 0., 1.);\n    return;\n  }\n\n  if(depth == 1.) {\n\n    vec3 pos1 = pos / length(pos);\n\n    if(Noise2d(vec2(floor((pos1.x + pos1.y) * 3e2), floor(pos1.z * 3e2))) > 0.99)\n      color.xyz = pos1 * 0.5 + 0.5;\n    else\n      color.xyz = vec3(0.);\n\n  } else {\n    color = texelFetch(T0, F, 0);\n\n    if(color.r > 0.)\n      color = (color * 2. + texelFetch(T0, F + ivec2(1, 0), 0) + texelFetch(T0, F + ivec2(0, 1), 0)) * 0.25;\n\n    float diff = 0.;\n    for(int i = 0; i < 8; i++) {\n      int step = i / 4;\n      ivec2 place = ivec2(i % 2, i % 4 / 2) * step;\n      float edge = texelFetch(Depth, F + place, 0).r +\n        texelFetch(Depth, F - place, 0).r - depth * 2.;\n      diff += abs(edge);\n    }\n\n    if(depth > 0.99)\n      diff *= 1. + (depth - 0.99);\n\n    if(diff > .00005) {\n      color.rgb = normalize(color.rgb) * 0.3;\n    } else {\n      if(ditherOn) {\n        color.r = dither(color.r, F);\n        color.g = dither(color.g, F);\n        color.b = dither(color.b, F);\n      }\n    }\n\n    if(depth > 0.995 && (depth - 0.99) * 1000. > float(b64[F.y % 8 * 8 + F.x % 8])) {\n      color = vec4(1.);\n    }\n  }\n\n  //color = texelFetch(T1, F, 0);\n  color.a = 1.;\n}";
+  var fScreen_default = "uniform sampler2D T0;\nuniform sampler2D T1;\nuniform sampler2D Depth;\nuniform mat4 invCamera;\nuniform mat4 invPerspective;\nuniform mat4 flyer;\nuniform vec3 viewSize;\nuniform vec3 scp0;\nuniform vec3 scp1;\nuniform vec3 scp2;\nuniform float timeout;\n\nin vec2 uv;\n\nout vec4 color;\n\nfloat Noise2d(in vec2 x) {\n  float xhash = cos(x.x * 37.0);\n  float yhash = cos(x.y * 57.0);\n  return fract(415.92653 * (xhash + yhash));\n}\n\nint b16[16] = int[] (1, 9, 3, 11, 13, 5, 15, 7, 4, 12, 2, 10, 16, 8, 14, 6);\nint b64[64] = int[] (1, 33, 9, 41, 3, 35, 11, 43, 49, 17, 57, 25, 51, 19, 59, 27, 13, 45, 5, 37, 15, 47, 7, 39, 61, 29, 53, 21, 63, 31, 55, 23, 4, 36, 12, 44, 2, 34, 10, 42, 52, 20, 60, 28, 50, 18, 58, 26, 16, 48, 8, 40, 14, 46, 6, 38, 64, 32, 56, 24, 62, 30, 54, 22);\n\nfloat dither(float v, ivec2 F) {\n  return v * 75. > float(b64[F.y % 8 * 8 + F.x % 8]) ? 1. : 0.;\n}\n\nconst bool ditherOn = true;\nconst float collisionDepth = 0.6;\n\nvoid main() {\n\n  ivec2 F = ivec2(gl_FragCoord.xy);\n\n  float depth = texelFetch(Depth, F, 0).r;\n  color = vec4(1.);\n\n  vec4 screenPos = vec4(uv.x, -uv.y, depth * 2. - 1., 1.);\n\n  vec4 pos4 = invCamera * screenPos;\n  vec3 pos = (pos4 / pos4.w).xyz - flyer[3].xyz;\n\n  /*if(distance(vec2(scp0.x, scp0.y), vec2(F)) < 10.) {\n    color = vec4(1., 0., 0., 1.);\n    return;\n  }\n\n  if(distance(vec2(scp1.x, scp1.y), vec2(F)) < 10.) {\n    color = vec4(0., 1., 0., 1.);\n    return;\n  }\n\n  if(distance(vec2(scp2.x, scp2.y), vec2(F)) < 10.) {\n    color = vec4(0., 0., 1., 1.);\n    return;\n  }*/\n\n  /*if(F.y < 4 && F.x < 4) {\n    color = vec4(texelFetch(Depth, ivec2(scp0.xy), 0).r < collisionDepth ? 1. : 0., texelFetch(Depth, ivec2(scp1.xy), 0).r < collisionDepth ? 1. : 0., texelFetch(Depth, ivec2(scp2.xy), 0).r < collisionDepth ? 1. : 0., 1.);\n    return;\n  }*/\n\n  color = texelFetch(T0, F, 0);\n\n  float r = 75.;\n  bool ui = false;\n\n  vec2 cntr = vec2(viewSize.x-r-10., viewSize.y - r-10.);\n  vec2 dif = cntr - gl_FragCoord.xy;\n  float l = length(dif);\n  if(l < r) {\n    float a = atan(-dif.x, dif.y);\n    if(l>r*.7 && l<r && timeout > 0.){\n      ui = true;\n      color.xyz = a / 6.282 + 0.5 > timeout ? vec3(.01):vec3(1.);\n    }\n  }\n\n  if(depth == 1. && !ui) {\n\n    vec3 pos1 = pos / length(pos);\n\n    if(Noise2d(vec2(floor((pos1.x + pos1.y) * 3e2), floor(pos1.z * 3e2))) > 0.99)\n      color.xyz = pos1 * 0.5 + 0.5;\n    else\n      color.xyz = vec3(0.);\n\n  } else {\n\n    if(color.r > 0.)\n      color = (color * 2. + texelFetch(T0, F + ivec2(1, 0), 0) + texelFetch(T0, F + ivec2(0, 1), 0)) * 0.25;\n\n    float diff = 0.;\n    for(int i = 0; i < 8; i++) {\n      int step = i / 4;\n      ivec2 place = ivec2(i % 2, i % 4 / 2) * step;\n      float edge = texelFetch(Depth, F + place, 0).r +\n        texelFetch(Depth, F - place, 0).r - depth * 2.;\n      diff += abs(edge);\n    }\n\n    if(depth > 0.99)\n      diff *= 1. + (depth - 0.99);\n\n    if(diff > .00005) {\n      color.rgb = normalize(color.rgb) * 0.3;\n    } else {\n      if(ditherOn) {\n        color.r = dither(color.r, F);\n        color.g = dither(color.g, F);\n        color.b = dither(color.b, F);\n      }\n    }\n\n    if(depth > 0.995 && (depth - 0.99) * 1000. > float(b64[F.y % 8 * 8 + F.x % 8])) {\n      color = vec4(1.);\n    }\n  }\n\n  //color = texelFetch(T1, F, 0);\n  color.a = 1.;\n}";
 
   // src/shaders/vScreenQuad.glsl
   var vScreenQuad_default = "out vec2 uv;\n\nvoid main() {\n  int i = gl_VertexID;\n  ivec2 uvi = ivec2(i % 2, (i + 1) % 4 / 2) * 2 - 1;\n  gl_Position = vec4(uvi.x, uvi.y, 0, 1);\n  uv = vec2(uvi);\n  //gl_Position = vec4(i%2*2-1, 1-(i+1)%4/2*2, 0., 1.);\n}";
 
   // src/shaders/vMain.glsl
-  var vMain_default = "uniform mat4 camera;\r\nuniform mat4 flyer;\r\nuniform vec3 sun;\r\nuniform float time;\r\n\r\nin vec3 at;\r\nin vec3 norm;\r\nin vec3 cell;\r\nin vec4 type;\r\nin float shape;\r\n\r\nout vec3 vcell;\r\nout vec3 vat;\r\nout float dist;\r\nflat out float light;\r\n\r\nflat out vec3 vnorm;\r\nflat out vec4 vcolor;\r\n\r\nflat out ivec4 vtype;\r\nflat out int vshape;\r\n\r\nfloat rand(float n){return fract(sin(n) * 43758.5453123);}\r\n\r\nmat4 axisRotation(vec3 axis, float angle) {\r\n\r\n  float x = axis.x;\r\n  float y = axis.y;\r\n  float z = axis.z;\r\n\r\n  float n = sqrt(x * x + y * y + z * z);\r\n  x /= n;\r\n  y /= n;\r\n  z /= n;\r\n  float c = cos(angle);\r\n  float s = sin(angle);\r\n  float omc = 1. - c;\r\n\r\n  return mat4(x * x + (1. - x * x) * c, x * y * omc + z * s, x * z * omc - y * s, 0., x * y * omc - z * s, y * y + (1. - y * y) * c, y * z * omc + x * s, 0., x * z * omc + y * s, y * z * omc - x * s, z * z + (1. - z * z) * c, 0., 0., 0., 0., 1.);\r\n}\r\n\r\nvoid main() {\r\n  vat = at;\r\n  vnorm = norm;\r\n  vcell = cell;\r\n\r\n  vtype = ivec4(type);\r\n  vshape = int(shape);\r\n\r\n  vec4 at4 = vec4(at, 1.);\r\n\r\n  vcolor.rgb = vec3(1.);\r\n\r\n  if(vtype.x == 9) {\r\n    vcolor.rgb = vec3(1.,0.,1.);\r\n    float a = rand(shape);\r\n    vec3 axis = normalize(vec3(rand(a+1.), rand(a+2.), rand(a+3.)));\r\n    //vec3 axis = vec3(1.,0.,0.);   \r\n    light -= a*0.3; \r\n    at4 = axisRotation(axis, time * 5e-3 * (.5+rand(a+4.)) + rand(a+4.) ) * at4;\r\n    at4.xyz += 15. * (vec3(rand(a+5.), rand(a+6.), rand(a+7.)) - .5);\r\n    at4.xyz += vec3(vtype.yzw);\r\n  }\r\n\r\n  //int si = int(shape);\r\n\r\n  /*if(vshape > 0)\r\n    //vcolor.rgb = vec3(shape/10000., mod(shape,100.)/100., mod(shape,10.)/10.) * 1.5;\r\n    vcolor.rgb = vec3(1.);\r\n  else\r\n    vcolor.rgb = vec3(.9);*/\r\n  //color = vec4(1., 1., 0., 1.);\r\n\r\n\r\n  if(vtype.x == 3) {\r\n    at4 = flyer * at4;\r\n    mat4 fnorm = flyer;\r\n    fnorm[3] = vec4(0.);\r\n    vnorm = normalize((fnorm * vec4(norm, 1.)).xyz);\r\n  }\r\n\r\n  if(vtype.x == 7) {\r\n    int id = vtype.y;\r\n    if(id % 2 == 0) {\r\n      vnorm.y = -vnorm.y;\r\n      at4.y = -at4.y;\r\n    }\r\n    float shift = fract(fract(float(id) / 1e2) + time * 1e-5 * (id % 2 == 1 ? 3. : -3.));\r\n    at4.y = at4.y + 7300. - pow(shift * 120., 2.);\r\n  }\r\n\r\n  vec4 pos;\r\n\r\n  if(vtype.x == 8) {\r\n    pos = at4;\r\n  } else {\r\n    pos = camera * at4;\r\n  }\r\n\r\n  vat = at4.xyz;\r\n  pos.y = -pos.y;\r\n\r\n  vec3 toSun = sun - vat;\r\n  //vec3 toSun = vec3(0, 1000, 0);\r\n  light = dot(vnorm, normalize(toSun)) * 0.2 + .9 - length(toSun) * 1e-6;\r\n\r\n  if(vtype.x == 7) {\r\n    light += 0.2;\r\n  }\r\n\r\n  dist = distance(vat, flyer[3].xyz);\r\n\r\n  gl_Position = pos;\r\n}\r\n";
+  var vMain_default = "uniform mat4 camera;\r\nuniform mat4 flyer;\r\nuniform vec3 sun;\r\nuniform float time;\r\nuniform int consuming;\r\nuniform float consumingStage;\r\n\r\nuniform int liveDebris[32];\r\n\r\nin vec3 at;\r\nin vec3 up;\r\nin vec3 norm;\r\nin vec3 cell;\r\nin vec4 type;\r\nin float shape;\r\n\r\nout vec3 vcell;\r\nout vec3 vat;\r\nout float dist;\r\nflat out float light;\r\n\r\nflat out vec3 vnorm;\r\nflat out vec4 vcolor;\r\n\r\nflat out ivec4 vtype;\r\nflat out int vshape;\r\n\r\nfloat rand(float n){return fract(sin(n) * 43758.5453123);}\r\n\r\nmat4 axisRotation(vec3 axis, float angle) {\r\n\r\n  float x = axis.x;\r\n  float y = axis.y;\r\n  float z = axis.z;\r\n\r\n  float n = sqrt(x * x + y * y + z * z);\r\n  x /= n;\r\n  y /= n;\r\n  z /= n;\r\n  float c = cos(angle);\r\n  float s = sin(angle);\r\n  float omc = 1. - c;\r\n\r\n  return mat4(x * x + (1. - x * x) * c, x * y * omc + z * s, x * z * omc - y * s, 0., x * y * omc - z * s, y * y + (1. - y * y) * c, y * z * omc + x * s, 0., x * z * omc + y * s, y * z * omc - x * s, z * z + (1. - z * z) * c, 0., 0., 0., 0., 1.);\r\n}\r\n\r\nvoid main() {\r\n  vat = at;\r\n  vnorm = norm;\r\n  vcell = cell;\r\n\r\n  vtype = ivec4(type);\r\n  vshape = int(shape);\r\n\r\n  vec4 at4 = vec4(at+up*0., 1.);\r\n\r\n  vcolor.rgb = vec3(1.);\r\n\r\n  if(vtype.x == 9) {\r\n    int swarm = vshape/32;\r\n    bool live = (liveDebris[swarm/30] & (1 << swarm%30)) != 0;\r\n    if(live || consuming == swarm){\r\n      vcolor.rgb = vec3(1.,0.,1.);\r\n      float a = rand(shape);\r\n      vec3 axis = normalize(vec3(rand(a+1.), rand(a+2.), rand(a+3.)));\r\n      light -= a*0.3; \r\n      mat4 rot = axisRotation(axis, time * 5. * (.5+rand(a+4.)) + rand(a+4.) );\r\n      vnorm = normalize((rot * vec4(norm, 1.)).xyz);\r\n      at4 = rot * at4;\r\n      at4.xyz += 25. * (vec3(rand(a+5.), rand(a+6.), rand(a+7.)) - .5);\r\n      at4.xyz += vec3(vtype.yzw);\r\n      at4.xyz += up * sin(float(swarm) + time*0.1) * 20.;\r\n      if(consuming == swarm)\r\n        at4.xyz = mix(at4.xyz, flyer[3].xyz, consumingStage);\r\n    } else {\r\n      at4 = vec4(1e6);\r\n    }\r\n  }\r\n\r\n  //int si = int(shape);\r\n\r\n  /*if(vshape > 0)\r\n    //vcolor.rgb = vec3(shape/10000., mod(shape,100.)/100., mod(shape,10.)/10.) * 1.5;\r\n    vcolor.rgb = vec3(1.);\r\n  else\r\n    vcolor.rgb = vec3(.9);*/\r\n  //color = vec4(1., 1., 0., 1.);\r\n\r\n\r\n  if(vtype.x == 3) {\r\n    at4 = flyer * at4;\r\n    mat4 fnorm = flyer;\r\n    fnorm[3] = vec4(0.);\r\n    vnorm = normalize((fnorm * vec4(norm, 1.)).xyz);\r\n  }\r\n\r\n  if(vtype.x == 7) {\r\n    int id = vtype.y;\r\n    if(id % 2 == 0) {\r\n      vnorm.y = -vnorm.y;\r\n      at4.y = -at4.y;\r\n    }\r\n    float shift = fract(fract(float(id) / 1e2) + time * 1e-2 * (id % 2 == 1 ? 3. : -3.));\r\n    at4.y = at4.y + 7300. - pow(shift * 120., 2.);\r\n    if(at4.y<0.){\r\n      at4.xz += vec2(rand(float(id))-.5,rand(float(id+1))-.5) * pow(at4.y/1e2,2.) ;\r\n    }\r\n  }\r\n\r\n  vec4 pos;\r\n\r\n  if(vtype.x == 8) {\r\n    pos = at4;\r\n  } else {\r\n    pos = camera * at4;\r\n  }\r\n\r\n  vat = at4.xyz;\r\n  pos.y = -pos.y;\r\n\r\n  vec3 toSun = sun - vat;\r\n  //vec3 toSun = vec3(0, 1000, 0);\r\n  light = dot(vnorm, normalize(toSun)) * 0.2 + .9 - length(toSun) * 1e-6;\r\n\r\n  if(vtype.x == 7) {\r\n    light += 0.2;\r\n  }\r\n\r\n  dist = distance(vat, flyer[3].xyz);\r\n\r\n  gl_Position = pos;\r\n}\r\n";
 
   // src/shaders.ts
   var shaders = {fMain: fMain_default, vMain: vMain_default, fScreen: fScreen_default, vScreenQuad: vScreenQuad_default};
   var shaders_default = shaders;
+
+  // src/sound.ts
+  var ax;
+  var sampleRate = 44100;
+  var volume = 1;
+  function init() {
+    ax = ax || new window.AudioContext();
+  }
+  function soundBuf(samples) {
+    const buffer = ax.createBuffer(samples.length, samples[0].length, sampleRate);
+    samples.forEach((d, i) => buffer.getChannelData(i).set(d));
+    return buffer;
+  }
+  function playBuf(buffer, loop = false) {
+    const source = ax.createBufferSource();
+    source.buffer = buffer;
+    let gain = ax.createGain();
+    gain.gain.value = 0;
+    gain.connect(ax.destination);
+    source.connect(gain);
+    source.loop = loop;
+    source.start();
+    return gain;
+  }
+  var brown = (freq = 0.02, vol = 0.1) => {
+    let bl = 0;
+    return () => {
+      var white = Math.random() * 2 - 1;
+      let v4 = (bl + freq * white) / (1 + freq);
+      bl = v4;
+      v4 *= vol / freq;
+      return v4;
+    };
+  };
+  var key = (n) => 2 ** (n / 12) * 440;
+  var tone;
+  function playNoise() {
+    tone = soundBuf([rangef(2e5, brown(0.02, 0.01))]);
+    return playBuf(tone, true);
+  }
+  var rng = RNG(Math.random());
+  function node(note, dur = 3, vol = 1) {
+    let [o, g] = og();
+    g.gain.setValueAtTime(volume * vol * 44 / key(note), ax.currentTime);
+    o.frequency.setValueAtTime(key(note), ax.currentTime);
+    g.gain.exponentialRampToValueAtTime(1e-5, ax.currentTime + dur);
+    o.stop(ax.currentTime + dur);
+  }
+  function og(type = "sine") {
+    let o = ax.createOscillator();
+    let g = ax.createGain();
+    o.type = type;
+    o.connect(g);
+    o.start();
+    g.connect(ax.destination);
+    return [o, g];
+  }
+
+  // src/game.ts
+  var rad = Math.PI / 180;
+  var InitialRot = [90, 0];
+  var mouseDelta = [0, 0];
+  var gs;
+  var MaxTimeout = 10;
+  function init2(debris) {
+    gs = {
+      dir: [1, 0, 0],
+      at: [0, -300, 0],
+      vel: 0.05,
+      time: 0,
+      drot: [0, 0],
+      smoothDrot: [0, 0],
+      rot: InitialRot,
+      consuming: -1,
+      consumingStage: 0,
+      debris,
+      liveDebris: new Int32Array(32),
+      debrisLeft: 0,
+      combo: 0,
+      timeout: 0,
+      timeoutSpeed: 0,
+      speedBonus: 0,
+      score: 0
+    };
+    for (let d of gs.debris) {
+      let live = rng2(2);
+      d.live = live ? true : false;
+    }
+    updateLiveDebris();
+    return gs;
+  }
+  var rng2 = RNG(1);
+  function update(dTime) {
+    gs.time += dTime;
+    if (dTime > rng2()) {
+      let d = gs.debris[rng2(gs.debris.length)];
+      d.live = !d.live;
+      updateLiveDebris();
+    }
+    if (gs.combo > 0)
+      gs.timeout -= (1 + gs.timeoutSpeed) * dTime;
+    if (gs.timeout <= 0 || gs.combo <= 0) {
+      gs.timeout = 0;
+      gs.timeoutSpeed = 0;
+      gs.combo = 0;
+    }
+    let velDelta = ((keyPressed[0] ? 1 : 0) + (keyPressed[2] ? -1 : 0)) * dTime * 0.3;
+    gs.vel += Math.max(velDelta, -gs.vel);
+    gs.speedBonus = Math.min(gs.speedBonus + dTime / 10, gs.vel);
+    mouseDelta = mouseDelta.map((d) => Math.sign(d) * Math.min(30, Math.abs(d) * dTime * 6e4));
+    gs.drot[X] = gs.drot[X] - mouseDelta[X] * 0.1;
+    gs.drot[Y] = Math.max(-89.999, Math.min(89.999, gs.drot[1] - mouseDelta[1] * 0.1));
+    let turn = Math.min(1, dTime * 10);
+    gs.smoothDrot = gs.smoothDrot.map((prevSmooth, i) => prevSmooth * (1 - turn) + gs.drot[i] * turn);
+    gs.rot = sum22(gs.rot, gs.smoothDrot, 6e-3);
+    gs.rot[Y] = Math.max(-89, Math.min(gs.rot[Y], 89));
+    gs.smoothDrot = scale2(gs.smoothDrot, 1 - turn * 0.2);
+    let [yaw, pitch] = gs.rot.map((v4) => v4 * rad);
+    gs.dir = norm([
+      Math.cos(pitch) * Math.cos(yaw),
+      Math.cos(pitch) * Math.sin(yaw),
+      Math.sin(pitch)
+    ]);
+    mouseDelta = [0, 0];
+    let delta = scale(gs.dir, gs.vel * dTime * 1e3);
+    gs.at = sum(gs.at, delta);
+    gs.debris.forEach((d, i) => {
+      let at = sum(d.at, scale(d.up, Math.sin(d.ind + gs.time * 0.1) * 20));
+      if (d.live && dist(at, gs.at) < 30) {
+        consume(d);
+      }
+    });
+    if (gs.consuming > -1) {
+      gs.consumingStage = gs.consumingStage + dTime * 10;
+      if (gs.consumingStage > 1) {
+        gs.consuming = -1;
+      }
+    }
+    const checkCollisions = true;
+    if (checkCollisions) {
+      for (let crashPoint in [0, 1, 2]) {
+        let proximity = crashPixel[crashPoint][3];
+        if (proximity > 10) {
+          let raw = [...crashPixel[crashPoint].slice(0, 3)];
+          let norm2 = norm(sumn(raw, -128));
+          let crashAngle = -mul(norm2, gs.dir);
+          let damage = crashAngle * gs.vel;
+          console.log("DAMAGE", damage);
+          gs.combo -= damage;
+          gs.timeout -= damage;
+          if (crashAngle > 0) {
+            node(rng2(20) - 60, crashAngle * 10, crashAngle ** 2);
+            gs.at = sumvn(gs.at, norm2, gs.vel * crashAngle * proximity / 2);
+            gs.vel *= 1 - Math.min(1, crashAngle * 0.03);
+          }
+        }
+      }
+    }
+  }
+  function consume(d) {
+    d.live = false;
+    let gain = ~~(d.score * comboMultiplier() * speedMultiplier() * cleanCityMultiplier());
+    notify(gain.toFixed());
+    node(rng2(20) - 30 + gs.combo);
+    gs.consuming = d.ind;
+    gs.consumingStage = 0;
+    gs.combo += 1;
+    gs.timeoutSpeed += 0.1;
+    gs.timeout = MaxTimeout;
+    console.log("gain", d.score);
+    gs.score += gain;
+    updateLiveDebris();
+  }
+  var keyPressed = [];
+  function initControls() {
+    ["keydown", "keyup", "mousedown", "mouseup", "mousemove"].forEach((t) => document.addEventListener(t, (e) => {
+      switch (e.type) {
+        case "mousemove":
+          mouseDelta = sum2(mouseDelta, [e.movementX, e.movementY]);
+          break;
+        case "mousedown":
+          keyPressed[e.button] = true;
+          break;
+        case "mouseup":
+          keyPressed[e.button] = false;
+          break;
+      }
+    }));
+  }
+  function updateLiveDebris() {
+    gs.debrisLeft = 0;
+    gs.liveDebris.fill(0);
+    for (let d of gs.debris) {
+      if (d.live) {
+        gs.liveDebris[~~(d.ind / 30)] += 1 << d.ind % 30;
+        gs.debrisLeft++;
+      }
+    }
+  }
+  function relativeTimeout() {
+    return gs.timeout / MaxTimeout;
+  }
+  function comboMultiplier() {
+    return ~~(10 + gs.combo) / 10;
+  }
+  function cleanCityMultiplier() {
+    return ~~(MaxDebris / gs.debrisLeft * 5) / 10;
+  }
+  function speedMultiplier() {
+    return 1 + 0.1 * ~~(gs.speedBonus ** 2 * 100);
+  }
 
   // src/render.ts
   var pMain;
@@ -839,12 +1073,22 @@ ${body}`;
   var textures2;
   var framebuffer2;
   var viewSize;
-  function init(size) {
+  var cx2d;
+  var notifications = [];
+  var smoothScore = 0;
+  function notify(text) {
+    notifications.push({text, at: [viewSize[X] * (Math.random() * 0.2 + 0.4), viewSize[Y] / 2]});
+  }
+  function init3(size) {
     let C = document.getElementById("C");
+    let D = document.getElementById("D");
     viewSize = size;
-    C.width = viewSize[X];
-    C.height = viewSize[Y];
+    C.width = D.width = viewSize[X];
+    C.height = D.height = viewSize[Y];
+    D.style.marginTop = `${-viewSize[Y]}px`;
     context(C);
+    cx2d = D.getContext("2d");
+    cx2d.fillStyle = "#fff";
     pMain = compile(shaders_default.vMain, shaders_default.fMain);
     pMainUniform = uniforms(pMain);
     pScreen = compile(shaders_default.vScreenQuad, shaders_default.fScreen);
@@ -854,14 +1098,39 @@ ${body}`;
     return [pMain, C];
   }
   var crashPoints = [[-1, 1, -1], [1, 1, -1], [0, 1, -1]];
-  function frame(state2, [bufs, elements], [bufsF, elementsF]) {
-    I.innerHTML = `LMB click to speed up, RMB to speed down. ${state2.at.map((v4) => ~~v4)} | ${crashPixel[0]};${crashPixel[1]};${crashPixel[2]}`;
-    let time = state2.time;
-    let [camera, perspective2, look] = viewMatrices(sum(sum(state2.at, scale(state2.dir, -5)), [0, 0, 0]), state2.dir, viewSize, PI / 4, [4, cityDepth + dist(state2.at, [0, cityDepth * 0.5, 0])]);
+  var rng3 = RNG(1);
+  function write(text, x, y) {
+    cx2d.fillText(text, x, y);
+    cx2d.strokeText(text, x, y);
+  }
+  function frame(gs2, [bufs, elements], [bufsF, elementsF], dTime) {
+    cx2d.clearRect(0, 0, viewSize[X], viewSize[Y]);
+    if (gs2.combo) {
+      cx2d.textAlign = "center";
+      cx2d.font = "bold 32pt sans-serif";
+      write(`x${comboMultiplier().toFixed(1)}`, viewSize[X] - 85, 100);
+      smoothScore = Math.min(gs2.score, smoothScore + Math.max((gs2.score - smoothScore) / 10, dTime * 10));
+      write(`${smoothScore.toFixed()}`, viewSize[X] / 2, 40);
+      cx2d.textAlign = "right";
+      cx2d.font = "bold 16pt Courier";
+      write(`speed`, viewSize[X] - 10, 200);
+      write(`clean city`, viewSize[X] - 10, 250);
+      cx2d.font = "bold 20pt Courier";
+      write(`x${speedMultiplier().toFixed(1)}`, viewSize[X] - 10, 220);
+      write(`x${cleanCityMultiplier().toFixed(1)}`, viewSize[X] - 10, 270);
+    }
+    cx2d.font = "bold 32pt Courier";
+    for (let n of notifications) {
+      write(n.text, n.at[X], n.at[Y]);
+      n.at[Y] -= dTime * 300;
+    }
+    I.innerHTML = `cs ${gs2.consuming} ${gs2.consumingStage} ${relativeTimeout()} combo ${gs2.combo} debris left ${gs2.debrisLeft} speed bonus ${speedMultiplier()} timeout ${gs2.timeout} timeout speed ${gs2.timeoutSpeed} `;
+    let time = gs2.time;
+    let [camera, perspective2, look] = viewMatrices(sum(sum(gs2.at, scale(gs2.dir, -5)), [0, 0, 0]), gs2.dir, viewSize, PI / 4, [4, cityDepth + dist2(gs2.at, [0, cityDepth * 0.5, 0])]);
     let invCamera = inverse(camera);
-    let flyer = lookTo(state2.at, state2.dir, [0, 0, 1]);
-    flyer = multiply(flyer, axisRotation([0, 0, 1], -state2.smoothDrot[X] * Math.PI / 4 / 100));
-    flyer = multiply(flyer, axisRotation([1, 0, 0], -state2.smoothDrot[Y] * Math.PI / 4 / 200));
+    let flyer = lookTo(gs2.at, gs2.dir, [0, 0, 1]);
+    flyer = multiply(flyer, axisRotation([0, 0, 1], -gs2.smoothDrot[X] * Math.PI / 4 / 100));
+    flyer = multiply(flyer, axisRotation([1, 0, 0], -gs2.smoothDrot[Y] * Math.PI / 4 / 200));
     let screenCrashPoints = crashPoints.map((p) => {
       let a = transform(camera, transform(flyer, p));
       a[X] = ~~((a[X] * 0.5 + 0.5) * viewSize[X]);
@@ -871,7 +1140,15 @@ ${body}`;
     });
     let startTime = Date.now();
     gl.useProgram(pMain);
-    setUniforms(pMainUniform, {camera, flyer, sun: [0, cityDepth, 0], time});
+    setUniforms(pMainUniform, {
+      camera,
+      flyer,
+      sun: [0, cityDepth, 0],
+      time,
+      "liveDebris[0]": gs2.liveDebris,
+      consuming: gs2.consuming,
+      consumingStage: gs2.consumingStage
+    });
     gl.bindFramebuffer(FRAMEBUFFER, framebuffer2);
     gl.clear(DEPTH_BUFFER_BIT | COLOR_BUFFER_BIT);
     gl.drawBuffers([
@@ -893,6 +1170,8 @@ ${body}`;
       flyer,
       time,
       invPerspective: inverse(perspective2),
+      timeout: relativeTimeout(),
+      viewSize: [viewSize[X], viewSize[Y], 0],
       scp0: screenCrashPoints[0],
       scp1: screenCrashPoints[1],
       scp2: screenCrashPoints[2]
@@ -900,6 +1179,7 @@ ${body}`;
     bindTextures(textures2, [pScreenUniform.T0, pScreenUniform.T1, pScreenUniform.Depth]);
     gl.bindFramebuffer(FRAMEBUFFER, null);
     gl.drawArrays(TRIANGLES, 0, 6);
+    gl.flush();
   }
   var crashPixel = rangef(4, (_) => new Uint8Array(4));
   async function checkCrash(screenCrashPoints) {
@@ -907,113 +1187,43 @@ ${body}`;
     await Promise.all(rangef(3, (n) => readPixelsAsync(screenCrashPoints[n][X], screenCrashPoints[n][Y], 1, 1, RGBA, UNSIGNED_BYTE, crashPixel[n])));
   }
 
-  // src/game.ts
-  var rad = Math.PI / 180;
-  var friction = 0;
-  var InitialRot = [90, 0];
-  var mouseDelta = [0, 0];
-  var state;
-  var tilt = 0;
-  function init2() {
-    state = {
-      dir: [1, 0, 0],
-      at: [0, -300, 0],
-      vel: 0.05,
-      time: 0,
-      drot: [0, 0],
-      smoothDrot: [0, 0],
-      rot: InitialRot
-    };
-    return state;
-  }
-  function update(dTime) {
-    state.time += dTime;
-    let velDelta = ((keyPressed[0] ? 1 : 0) + (keyPressed[2] ? -1 : 0)) * dTime * 3e-4;
-    state.vel += Math.max(velDelta, -state.vel);
-    mouseDelta = mouseDelta.map((d) => Math.sign(d) * Math.min(30, Math.abs(d) * dTime * 60));
-    state.drot[X] = state.drot[X] - mouseDelta[X] * 0.1;
-    state.drot[Y] = Math.max(-89.999, Math.min(89.999, state.drot[1] - mouseDelta[1] * 0.1));
-    let turn = Math.min(1, dTime * 0.01);
-    state.smoothDrot = state.smoothDrot.map((prevSmooth, i) => prevSmooth * (1 - turn) + state.drot[i] * turn);
-    state.rot = sum22(state.rot, state.smoothDrot, 6e-3);
-    state.rot[Y] = Math.max(-89, Math.min(state.rot[Y], 89));
-    state.smoothDrot = scale2(state.smoothDrot, 1 - turn * 0.2);
-    let [yaw, pitch] = state.rot.map((v4) => v4 * rad);
-    state.dir = norm([
-      Math.cos(pitch) * Math.cos(yaw),
-      Math.cos(pitch) * Math.sin(yaw),
-      Math.sin(pitch)
-    ]);
-    let right = [Math.sin(yaw), -Math.cos(yaw), 0];
-    let left = [-Math.sin(yaw), Math.cos(yaw), 0];
-    let back = [-Math.cos(yaw), -Math.sin(yaw), 0];
-    tilt += mouseDelta[0];
-    tilt *= 1 - 10 * dTime;
-    mouseDelta = [0, 0];
-    state.vel *= 1 - friction * dTime;
-    let delta = scale(state.dir, state.vel * dTime);
-    state.at = sum(state.at, delta);
-    const checkCollisions = true;
-    if (checkCollisions) {
-      for (let crashPoint in [0, 1, 2]) {
-        let proximity = crashPixel[crashPoint][3];
-        if (proximity > 10) {
-          let raw = [...crashPixel[crashPoint].slice(0, 3)];
-          let norm2 = norm(sumn(raw, -128));
-          let crashAngle = -mul(norm2, state.dir);
-          state.at = sumvn(state.at, norm2, state.vel * crashAngle * proximity / 2);
-          if (state.vel > -0.1)
-            state.vel *= 1 - crashAngle * 0.01;
-        }
-      }
-    }
-  }
-  var keyPressed = [];
-  function initControls() {
-    ["keydown", "keyup", "mousedown", "mouseup", "mousemove"].forEach((t) => document.addEventListener(t, (e) => {
-      switch (e.type) {
-        case "mousemove":
-          mouseDelta = sum2(mouseDelta, [e.movementX, e.movementY]);
-          break;
-        case "mousedown":
-          keyPressed[e.button] = true;
-          break;
-        case "mouseup":
-          keyPressed[e.button] = false;
-          break;
-      }
-    }));
-  }
-
-  // src/sound.ts
-  var rng = RNG(Math.random());
-
   // src/prog.ts
+  var noiseGain;
+  var noiseVol = 1;
+  var attributes = {at: [3], norm: [3], cell: [3], type: [4], shape: [1], up: [3]};
   function main() {
     const viewSize2 = [1200, 800];
     let startTime = Date.now();
-    let [world, flyer] = initGeometry();
-    let [pMain2, C] = init(viewSize2);
+    let [world, flyer, debris] = initGeometry();
+    let [pMain2, C] = init3(viewSize2);
     initControls();
-    let state2 = init2();
-    let conf = {at: [3], norm: [3], cell: [3], type: [4], shape: [1]};
-    let [bufs, elements] = putShapesInElementBuffers(world, conf);
-    let [bufsF, elementsF] = putShapesInElementBuffers(flyer, conf);
+    let state = init2(debris);
+    let [bufs, elements] = putShapesInElementBuffers(world, attributes);
+    let [bufsF, elementsF] = putShapesInElementBuffers(flyer, attributes);
     console.log(`${Date.now() - startTime} ms ${elements.faces.length} faces`);
     let t = 0;
     function update2(dTime) {
       update(dTime);
-      frame(state2, [bufs, elements], [bufsF, elementsF]);
+      frame(state, [bufs, elements], [bufsF, elementsF], dTime);
+      if (noiseGain) {
+        noiseGain.gain.value = state.vel * noiseVol * 0.7;
+        if (dTime * state.vel * 10 > Math.random()) {
+          noiseVol = 0.5 + Math.random();
+        }
+        noiseVol = noiseVol * (1 - dTime) + dTime;
+      }
       t++;
     }
     let started = false;
     C.onclick = (e) => {
       togglePlaying(true);
       if (!started) {
+        init();
+        noiseGain = playNoise();
         let lastTime = Date.now();
         const loop = () => {
           if (playing())
-            update2(Date.now() - lastTime);
+            update2((Date.now() - lastTime) / 1e3);
           lastTime = Date.now();
           requestAnimationFrame(loop);
         };
@@ -1034,10 +1244,12 @@ ${body}`;
     function togglePlaying(on) {
       if (on == null)
         on = !playing();
-      if (on)
+      if (on) {
         C.requestPointerLock();
-      else
+      } else {
         document.exitPointerLock();
+        noiseGain.gain.value = 0;
+      }
     }
     update2(0);
   }

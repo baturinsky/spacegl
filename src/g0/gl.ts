@@ -143,7 +143,13 @@ export function drawQuad() {
 }
 
 /**TODO: autogen all types */
-const uniformTypes = { [gc.INT]: "i", [gc.UNSIGNED_INT]: "ui", [gc.FLOAT]: "f", [gc.FLOAT_VEC3]: "f", [gc.FLOAT_MAT4]: "Matrix4fv" }
+const uniformTypes = {
+  [gc.INT]: "i",
+  [gc.UNSIGNED_INT]: "ui",
+  [gc.FLOAT]: "f",
+  [gc.FLOAT_VEC3]: "f",
+  [gc.FLOAT_MAT4]: "Matrix4fv"
+}
 
 export type Uniforms = { [field: string]: (...args: any[]) => void; };
 
@@ -152,19 +158,28 @@ export function uniforms(p: WebGLProgram): Uniforms {
   const u: { [field: string]: (...args: any[]) => void } = {};
   for (let i = 0; i < gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS); ++i) {
     const info = gl.getActiveUniform(p, i);
+    console.log(info);
     //@ts-ignore
     let suffix: string = uniformTypes[info.type] || "i";
     const loc = gl.getUniformLocation(p, info.name);
-    if (suffix.indexOf("Matrix") >= 0)
-      //@ts-ignore
-      u[info.name] = (...args) => gl[`uniform${suffix}`](loc, false, ...args);
-    else
-      u[info.name] = (...args) => {
-        if (args[0].length > 0)
-          args = args[0];
-        //@ts-ignore         
-        gl[`uniform${args.length}${suffix}`](loc, ...args);
-      }
+    let f =
+      info.size > 1 ?
+        (args: number[]) => {
+          //@ts-ignore
+          gl[`uniform1${suffix}v`](loc, args)
+        }
+        : suffix.indexOf("Matrix") >= 0 ?
+          //@ts-ignore
+          (args: number[]) => gl[`uniform${suffix}`](loc, false, args)
+          :
+          (...args: number[]) => {
+            if (args[0].length > 0)
+              args = args[0];
+            //@ts-ignore
+            gl[`uniform${args.length}${suffix}`](loc, ...args);
+          }
+
+    u[info.name] = f;
   }
   return u;
 }

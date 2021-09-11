@@ -4,9 +4,11 @@ uniform sampler2D Depth;
 uniform mat4 invCamera;
 uniform mat4 invPerspective;
 uniform mat4 flyer;
+uniform vec3 viewSize;
 uniform vec3 scp0;
 uniform vec3 scp1;
 uniform vec3 scp2;
+uniform float timeout;
 
 in vec2 uv;
 
@@ -55,15 +57,28 @@ void main() {
     return;
   }*/
 
-  if(F.y < 4 && F.x < 4) {
-    color = vec4(
-      texelFetch(Depth, ivec2(scp0.xy), 0).r < collisionDepth ? 1. : 0., 
-      texelFetch(Depth, ivec2(scp1.xy), 0).r < collisionDepth ? 1. : 0., 
-      texelFetch(Depth, ivec2(scp2.xy), 0).r < collisionDepth ? 1. : 0., 1.);
+  /*if(F.y < 4 && F.x < 4) {
+    color = vec4(texelFetch(Depth, ivec2(scp0.xy), 0).r < collisionDepth ? 1. : 0., texelFetch(Depth, ivec2(scp1.xy), 0).r < collisionDepth ? 1. : 0., texelFetch(Depth, ivec2(scp2.xy), 0).r < collisionDepth ? 1. : 0., 1.);
     return;
+  }*/
+
+  color = texelFetch(T0, F, 0);
+
+  float r = 75.;
+  bool ui = false;
+
+  vec2 cntr = vec2(viewSize.x-r-10., viewSize.y - r-10.);
+  vec2 dif = cntr - gl_FragCoord.xy;
+  float l = length(dif);
+  if(l < r) {
+    float a = atan(-dif.x, dif.y);
+    if(l>r*.7 && l<r && timeout > 0.){
+      ui = true;
+      color.xyz = a / 6.282 + 0.5 > timeout ? vec3(.01):vec3(1.);
+    }
   }
 
-  if(depth == 1.) {
+  if(depth == 1. && !ui) {
 
     vec3 pos1 = pos / length(pos);
 
@@ -73,7 +88,6 @@ void main() {
       color.xyz = vec3(0.);
 
   } else {
-    color = texelFetch(T0, F, 0);
 
     if(color.r > 0.)
       color = (color * 2. + texelFetch(T0, F + ivec2(1, 0), 0) + texelFetch(T0, F + ivec2(0, 1), 0)) * 0.25;
