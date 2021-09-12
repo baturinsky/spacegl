@@ -1,3 +1,5 @@
+uniform float time;
+
 in vec3 vcell;
 in vec3 vat;
 in float dist;
@@ -7,6 +9,7 @@ flat in vec3 vnorm;
 flat in vec4 vcolor;
 
 flat in ivec4 vtype;
+flat in int vshape;
 
 layout(location = 0) out vec4 c0;
 layout(location = 1) out vec4 c1;
@@ -17,6 +20,12 @@ float hexDigitF(int n, int place) {
 
 int hex2Digit(int n, int place) {
   return (n >> (place * 8)) % 256;
+}
+
+float rand(float n){return fract(sin(n) * 43758.5453123);}
+
+bool animationSinus(vec2 uv, float time, float variant){
+  return fract(sin(uv.x * 13.)/sin(uv.y * 11.) * (.5 + rand(variant * 300.)) + 0.1 * time * (1. + variant)) > variant + 0.1;
 }
 
 void main() {
@@ -56,12 +65,21 @@ void main() {
     bright += mix(near, far, l);
 
   } else if(itype == 4) {
-    bright += vat.z * 5e-4 + (fract(vat.y / 40. + 0.55) < .1 || fract(atan(vat.x, vat.z) / 3.141 * 36. + 0.45) < .1 ? -1. : 0.);
+    float y = vat.y / 10.;
+    float a = atan(vat.x, vat.z) / 3.141 * 36. * 4.;
+    bool yb = fract(y) < .2;
+    bool ab = fract(a) < .2;
+    bool r = rand(floor(y) * floor(a)) < 0.7;
+    bright += vat.z * 5e-4 + (r && (ab || yb) || (ab&&yb) ? -1. : 0.);
   } else if(itype == 5) {
     bright = 2.;
-  }
-
-  if(itype == 7) {
+  } else if(itype == 10) {
+    if(vcell.y>1.1 && vcell.y<1.9 && (vcell.x>.1 && vcell.x < .9 || vcell.x>2.1 && vcell.x < 2.9)){
+      float x = fract(vcell.x);
+      float y = fract(vcell.y);
+      bright = rand(floor(y * 15. + floor((x-0.1)*15.)*100. - time*5. + float(vshape)))>0.5?1.:0.;
+    }
+  } else if(itype == 7) {
     float y = fract(vcell.y);
     bright += y < 0.03 || y > 0.97 || y>0.49 && y<0.51? -.5 : .0;
   }

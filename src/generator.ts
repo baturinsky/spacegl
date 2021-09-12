@@ -12,7 +12,7 @@ const ts = shape.transformShape;
 
 const BUILDING = 2, FLYER = 3, TUNNEL = 4, WARPER = 5, SHIP = 7, FIXED = 8, DEBRIS = 9, AD = 10;
 
-type Building = Shape & { height: number, extend: Vec2, density: number }
+type Building = Shape & { height: number, extend: Vec2, density: number, simple: boolean }
 
 export const cityCols = 72,
   cityRows = 180,
@@ -68,21 +68,50 @@ export function initGeometry() {
   }
 
   /*let ui = shape.mesh(1, 1, (x, y) => [x * 2 - 1, y * 0.05 + 0.95, 0]);
-  ui.common = {type : [FIXED, 0, 0, 0]}
+  ui.common = { type: [FIXED, 0, 0, 0] }
   passable.push(ui);*/
+
+  let usedPOIs = new Set<Building>();
+  const MaxAds = 30 * 16;
+  let ads = [];
+
+  while (ads.length < MaxAds) {
+    let spot = rng(buildings.length);
+    let building = buildings[spot];
+    if (!building || !building.simple || usedPOIs.has(building))
+      continue;
+    usedPOIs.add(building)
+    let at = lastOf(building.verts).at;
+    let up = v3.sub(at, building.verts[building.verts.length - 2].at);
+    let ad = { ind: ads.length, at, up } as Debris;
+    ads.push(ad)
+
+    let w = 5 + rng(5), h = 20 + rng(10);
+    let adShape = shape.towerMesh([[-w, -1], [w, -1], [w, 1], [-w, 1]], [[0, 0], [1, 0], [1, h], [0, h]]);
+    ts(adShape, m4.axisRotation([0, 1, 0], (spot % cityCols) / cityCols * PI2));
+    adShape.common = {
+      type: [AD, ...ad.at],
+      shape: ad.ind,
+      up: ad.up
+    };
+    solid.push(adShape);
+  }
 
   while (debris.length < MaxDebris) {
     let building = buildings[rng(buildings.length)];
     if (building && building.height * rng() < building.density && building.density > 0.4) {
+      if (usedPOIs.has(building))
+        continue;
+      usedPOIs.add(building)
       let score = ~~((building.density / (building.height + 10) * 400) ** 2 + 1);
       let at = lastOf(building.verts).at;
       let up = v3.sub(at, building.verts[building.verts.length - 2].at);
-      let d = { ind: debris.length, at, up, live: true, score } as Debris;
+      let d = { ind: debris.length, at, up, score } as Debris;
       debris.push(d)
     }
   }
 
-  debris.forEach((debris, ind) => {
+  for (let d of debris) {
     for (let i = 0; i < 32; i++) {
       let size = rng() * 3 + 1;
       let debrisShape = shape.quad(shape.vertsAt([
@@ -92,13 +121,13 @@ export function initGeometry() {
         [size / 2, -size / 2, 0],
       ]))
       debrisShape.common = {
-        type: [DEBRIS, ...debris.at],
-        shape: debris.ind * 32 + i,
-        up: debris.up
+        type: [DEBRIS, ...d.at],
+        shape: d.ind * 32 + i,
+        up: d.up
       };
       passable.push(debrisShape);
     }
-  });
+  };
 
   let i = 0;
   for (let s of [...solid, ...passable]) {
@@ -293,12 +322,9 @@ function generateBuildings(rng: Rng) {
       r *= 1 - (0.1 + extend[X] + extend[Y]);
       buildings[i] = building;
       heights[i] = height;
-      building.extend = extend;
-      building.height = height;
-      building.density = density;
+      Object.assign(building, { extend, height, density, simple });
       for (let s of slots)
         heights[s] = height;
-
 
       let poiH = height + rng() * 10 + 30;
       //POI
@@ -317,8 +343,6 @@ function tunnelCity(buildings: Building[]) {
     if (!b)
       continue;
     let a = (i % cityCols) / cityCols * PI2 + b.extend[X] / 2;
-
-    let matrix = m4.multiply
 
     if (b.extend[X] > 1 || b.extend[Y] > 1)
       ts(b, m4.scalingv([b.extend[X] + 1, b.extend[Y] + 1, 1]),);

@@ -73,12 +73,14 @@ function main() {
         if (gs.points > 0) {
           gs.upgrades[n]++;
           gs.points--;
+          gs.combo = 0;
         }
         break;
       case "down":
         if (gs.upgrades[n] > 0) {
           gs.upgrades[n]--;
           gs.points++;
+          gs.combo = 0;
         }
         break;
       case "save":

@@ -128,7 +128,7 @@ export function update(dTime: number) {
     gs.combo = 0;
   }
 
-  let velDelta = ((keyPressed[0] ? 1 : 0) + (keyPressed[2] ? -1 : 0)) * dTime * (0.15 + gs.upgrades[Acceleration] * 0.1);
+  let velDelta = ((keyPressed[0] ? 1 : 0) + (keyPressed[2] ? -1 : 0)) * dTime * (0.15 + gs.upgrades[Acceleration]**0.7 * 0.1);
 
   gs.vel += Math.max(velDelta, -gs.vel);
 
@@ -144,7 +144,7 @@ export function update(dTime: number) {
     Math.min(89.999, gs.drot[1] - mouseDelta[1] * 0.1)
   );
 
-  let turn = Math.min(1, dTime * (7 + gs.upgrades[Turning] * 3));
+  let turn = Math.min(1, dTime * (7 + gs.upgrades[Turning]**0.7 * 3));
 
   gs.smoothDrot = gs.smoothDrot.map(
     (prevSmooth, i) => prevSmooth * (1 - turn) + gs.drot[i] * turn
@@ -193,7 +193,7 @@ export function update(dTime: number) {
         let crashAngle = -v3.mul(norm, gs.dir);
         let damage = crashAngle * gs.vel;
         console.log("DAMAGE", damage);
-        damage -= gs.upgrades[Durability] * 0.05;
+        damage -= Math.random() * gs.upgrades[Durability]**0.6 * 0.1;
         if (damage > 0) {
           gs.combo -= damage;
           gs.timeout -= damage;
@@ -222,7 +222,7 @@ function consume(d: Debris) {
   gs.consumingStage = 0;
 
   gs.combo += 1;
-  gs.timeoutSpeed += 0.1 / (1 + 0.3 * gs.upgrades[Timeout]);
+  gs.timeoutSpeed += 0.1 / (1 + 0.3 * gs.upgrades[Timeout] ** 0.7);
   gs.timeout = MaxTimeout;
 
   //console.log("gain", d.score);
@@ -280,7 +280,7 @@ export function relativeTimeout() {
 }
 
 export function comboMultiplier() {
-  return ~~(10 + ~~(gs.upgrades[ComboStart] * 3.334) + gs.combo) / 10;
+  return ~~(10 + ~~(gs.upgrades[ComboStart] ** 0.7 * 3) + gs.combo) / 10;
 }
 
 export function cleanCityMultiplier() {

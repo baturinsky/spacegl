@@ -77,6 +77,16 @@ void main() {
     }
   }
 
+  if(vtype.x == 10) {
+    if(vshape % 2 == 0) {
+      mat4 rot = axisRotation(up, time);
+      at4 = rot * at4;
+    } else {
+      at4.xyz += up * sin(float(vshape) + time) * 20.;
+    }
+    at4.xyz += vec3(vtype.yzw);
+  }
+
   if(vtype.x == 3) {
     at4 = flyer * at4;
     mat4 fnorm = flyer;
