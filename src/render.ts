@@ -230,5 +230,7 @@ export function renderUI(gs: game.GameState) {
     <span class="st">${v}</span>    
     <button style="visibility:${v != "New Save"?'':'hidden'}" id="load_${i}" class="lb">Load</button>
     </div>
-  `).join("")}`
+  `).join("")}
+  <br/><br/><button id="reset">Reset position</button>  
+  `
 }

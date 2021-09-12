@@ -68,8 +68,8 @@ export function initGeometry() {
   }
 
   /*let ui = shape.mesh(1, 1, (x, y) => [x * 2 - 1, y * 0.05 + 0.95, 0]);
-  shape.setType(ui, v => [FIXED, 0, 0, 0])
-  world.push(ui);*/
+  ui.common = {type : [FIXED, 0, 0, 0]}
+  passable.push(ui);*/
 
   while (debris.length < MaxDebris) {
     let building = buildings[rng(buildings.length)];

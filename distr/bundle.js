@@ -1275,7 +1275,9 @@ ${body}`;
     <span class="st">${v4}</span>    
     <button style="visibility:${v4 != "New Save" ? "" : "hidden"}" id="load_${i}" class="lb">Load</button>
     </div>
-  `).join("")}`;
+  `).join("")}
+  <br/><br/><button id="reset">Reset position</button>  
+  `;
   }
 
   // src/prog.ts
@@ -1283,7 +1285,7 @@ ${body}`;
   var noiseVol = 1;
   var attributes = {at: [3], norm: [3], cell: [3], type: [4], shape: [1], up: [3]};
   function main() {
-    const viewSize2 = [1200, 800];
+    const viewSize2 = [Math.min(window.innerWidth * 0.95, 1200), Math.min(window.innerHeight * 0.95, 800)];
     let startTime = Date.now();
     let [world, flyer] = initGeometry();
     let [C, O2] = init3(viewSize2);
@@ -1351,6 +1353,11 @@ ${body}`;
           init2();
           renderUI(null);
           update2(0);
+          setTimeout(() => togglePlaying(true), 10);
+          break;
+        case "reset":
+          gs2.at = [0, 0, 0];
+          gs2.combo = 0;
           setTimeout(() => togglePlaying(true), 10);
           break;
       }

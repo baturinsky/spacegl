@@ -15,8 +15,8 @@ const attributes = { at: [3], norm: [3], cell: [3], type: [4], shape: [1], up: [
 
 function main() {
 
-  const viewSize: Vec2 = [1200, 800];
-
+  const viewSize: Vec2 = [Math.min(window.innerWidth*0.95, 1200), Math.min(window.innerHeight*0.95, 800)];
+  
   let startTime = Date.now();
 
   let [world, flyer] = initGeometry();
@@ -94,6 +94,11 @@ function main() {
         game.init();
         render.renderUI(null);
         update(0);
+        setTimeout(() => togglePlaying(true), 10)
+        break;
+      case "reset":
+        gs.at = [0,0,0];
+        gs.combo = 0;
         setTimeout(() => togglePlaying(true), 10)
         break;
     }
