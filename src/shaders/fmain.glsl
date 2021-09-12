@@ -33,6 +33,7 @@ void main() {
   int t1 = vtype.y;
   int t2 = vtype.z;
   float bright = light;
+  float shape = float(vshape);
   if(itype == 2) {
     float hm = hexDigitF(t2, 0);
     float vm = hexDigitF(t2, 1);
@@ -77,7 +78,12 @@ void main() {
     if(vcell.y>1.1 && vcell.y<1.9 && (vcell.x>.1 && vcell.x < .9 || vcell.x>2.1 && vcell.x < 2.9)){
       float x = fract(vcell.x);
       float y = fract(vcell.y);
-      bright = rand(floor(y * 15. + floor((x-0.1)*15.)*100. - time*5. + float(vshape)))>0.5?1.:0.;
+      float fullCols = 3. + floor(rand(shape)*3.);
+      float col = floor((x-0.1)/0.8*(fullCols * 4. - 1.));
+      float row = floor((y * 15. - time*5.) * (1. + rand(shape*1e3)));
+      bright = mod(row,4.) == 3. || mod(col,4.) == 3. ||  rand(floor(row + col*100. + shape))>0.8?1.:0.;
+      if(rand(shape*1e2) > 0.5)
+        bright = 1. - bright;
     }
   } else if(itype == 7) {
     float y = fract(vcell.y);
