@@ -7,14 +7,27 @@ import { Vec2 } from "./g0/v";
 import { rangef, RNG, X, Y } from "./g0/misc";
 import { crashPixel, notify } from "./render";
 import { Debris, MaxDebris } from "./generator";
+import { saveToSlot } from "./prog";
+import { debris } from "./generator";
 
 const rad = Math.PI / 180,
   InitialRot = [90, 0] as v.Vec2;
 
 let mouseDelta = [0, 0];
-let gs: GameState;
+let gs: GameState = {} as any;
 
 export const MaxTimeout = 10;
+
+const Radius = 0, Acceleration = 1, Turning = 2, Timeout = 3, ComboStart = 4, Durability = 5;
+
+export const UpgradeNames = [
+  "Extend collection radius",
+  "Accelerate and brake faster",
+  "Turn faster",
+  "Longer combo timer",
+  "Bigger starting combo multiplier",
+  "Less combo loss on collisions"
+]
 
 export type GameState = {
   dir: Vec3;
@@ -38,10 +51,16 @@ export type GameState = {
   speedBonus: number;
 
   score: number;
+
+  upgrades: number[];
+  points: number;
+  level: number;
 };
 
-export function init(debris: Debris[]) {
-  gs = {
+const liveDebris = new Int32Array(32);
+
+export function init() {
+  Object.assign(gs, {
     dir: [1, 0, 0],
     at: [0, -300, 0],
     vel: 0.05,
@@ -54,7 +73,7 @@ export function init(debris: Debris[]) {
     consumingStage: 0,
 
     debris,
-    liveDebris: new Int32Array(32),
+    liveDebris,
     debrisLeft: 0,
 
     combo: 0,
@@ -62,8 +81,13 @@ export function init(debris: Debris[]) {
     timeoutSpeed: 0,
     speedBonus: 0,
 
-    score: 0
-  };
+    score: 0,
+
+    upgrades: [0, 0, 0, 0, 0, 0],
+
+    points: 0,
+    level: 0
+  });
 
   for (let d of gs.debris) {
     let live = rng(2);
@@ -81,6 +105,14 @@ export function update(dTime: number) {
 
   gs.time += dTime;
 
+  while (scoreForNextLevel() <= gs.score) {
+    notify("LEVEL UP!", 2)
+    gs.level++;
+    gs.points++;
+    for (let i = 0; i < 12; i++)
+      setTimeout(() => snd.node(i), i * 100);
+  }
+
   if (dTime > rng()) {
     let d = gs.debris[rng(gs.debris.length)];
     d.live = !d.live;
@@ -96,7 +128,7 @@ export function update(dTime: number) {
     gs.combo = 0;
   }
 
-  let velDelta = ((keyPressed[0] ? 1 : 0) + (keyPressed[2] ? -1 : 0)) * dTime * 0.3;
+  let velDelta = ((keyPressed[0] ? 1 : 0) + (keyPressed[2] ? -1 : 0)) * dTime * (0.15 + gs.upgrades[Acceleration] * 0.1);
 
   gs.vel += Math.max(velDelta, -gs.vel);
 
@@ -112,7 +144,7 @@ export function update(dTime: number) {
     Math.min(89.999, gs.drot[1] - mouseDelta[1] * 0.1)
   );
 
-  let turn = Math.min(1, dTime * 10);
+  let turn = Math.min(1, dTime * (7 + gs.upgrades[Turning] * 3));
 
   gs.smoothDrot = gs.smoothDrot.map(
     (prevSmooth, i) => prevSmooth * (1 - turn) + gs.drot[i] * turn
@@ -138,7 +170,7 @@ export function update(dTime: number) {
 
   gs.debris.forEach((d, i) => {
     let at = v3.sum(d.at, v3.scale(d.up, Math.sin(d.ind + gs.time * 0.1) * 20.));
-    if (d.live && v3.dist(at, gs.at) < 30) {
+    if (d.live && v3.dist(at, gs.at) < 30 + (gs.upgrades[Radius] ** 0.4) * 10) {
       consume(d);
     }
   });
@@ -161,8 +193,11 @@ export function update(dTime: number) {
         let crashAngle = -v3.mul(norm, gs.dir);
         let damage = crashAngle * gs.vel;
         console.log("DAMAGE", damage);
-        gs.combo -= damage;
-        gs.timeout -= damage;
+        damage -= gs.upgrades[Durability] * 0.05;
+        if (damage > 0) {
+          gs.combo -= damage;
+          gs.timeout -= damage;
+        }
         if (crashAngle > 0) {
           snd.node(rng(20) - 60, crashAngle * 10, crashAngle ** 2);
           gs.at = v3.sumvn(gs.at, norm, gs.vel * crashAngle * proximity / 2)
@@ -187,10 +222,10 @@ function consume(d: Debris) {
   gs.consumingStage = 0;
 
   gs.combo += 1;
-  gs.timeoutSpeed += 0.1;
+  gs.timeoutSpeed += 0.1 / (1 + 0.3 * gs.upgrades[Timeout]);
   gs.timeout = MaxTimeout;
 
-  console.log("gain", d.score);
+  //console.log("gain", d.score);
 
   gs.score += gain;
 
@@ -235,14 +270,17 @@ function updateLiveDebris() {
     }
   }
 
+  if (gs.time > 1)
+    saveToSlot(0);
 }
+
 
 export function relativeTimeout() {
   return gs.timeout / MaxTimeout;
 }
 
 export function comboMultiplier() {
-  return ~~(10 + gs.combo) / 10;
+  return ~~(10 + ~~(gs.upgrades[ComboStart] * 3.334) + gs.combo) / 10;
 }
 
 export function cleanCityMultiplier() {
@@ -253,20 +291,25 @@ export function speedMultiplier() {
   return 1 + 0.1 * ~~(gs.speedBonus ** 2 * 100);
 }
 
+export function save() {
+  let save = { ...gs } as any;
+  delete save.liveDebris;
+  save.debris = save.debris.map((d: Debris) => d.live ? 1 : 0).join('');
+  save.date = new Date().toLocaleString();
+  return JSON.stringify(save);
+}
 
+export function load(s: string) {
+  if (!s)
+    return;
+  let liveDebris = gs.liveDebris, debris = gs.debris;
+  Object.assign(gs, JSON.parse(s));
+  (gs.debris as any).split().forEach((v: string, i: number) => debris[i].live = v == '1')
+  gs.liveDebris = liveDebris;
+  gs.debris = debris;
+  updateLiveDebris();
+}
 
-/*
-    if (crashPixel[1][3]>10) {
-      state.at = v3.sumvn(state.at, left, state.vel * 10)
-      state.at = v3.sumvn(state.at, back, state.vel * 10)
-      if (state.vel > -0.1)
-        state.vel -= 0.005;
-      //console.log("L");
-    }
-    if (crashPixel[2][3]>10) {
-      state.at = v3.sumvn(state.at, back, state.vel * 100)
-      if (state.vel > -0.1)
-        state.vel -= 0.03;
-      //console.log("B");
-    }
-*/
+export function scoreForNextLevel() {
+  return (gs.level + 1) * (gs.level + 2) * 500;
+}

@@ -158,7 +158,7 @@ export function uniforms(p: WebGLProgram): Uniforms {
   const u: { [field: string]: (...args: any[]) => void } = {};
   for (let i = 0; i < gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS); ++i) {
     const info = gl.getActiveUniform(p, i);
-    console.log(info);
+    //console.log(info);
     //@ts-ignore
     let suffix: string = uniformTypes[info.type] || "i";
     const loc = gl.getUniformLocation(p, info.name);

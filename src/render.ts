@@ -10,31 +10,38 @@ import { Vec3 } from "./g0/v3";
 import * as game from "./game"
 import { dist, Vec2, mulEach, vec3 } from "./g0/v";
 import { cityDepth } from "./generator";
-import { test } from "./sound";
 
-type Notification = {text:string, at:Vec2};
+type Notification = { text: string, at: Vec2, importance:number };
 
 let
   pMain: WebGLProgram, pScreen: WebGLProgram,
   pMainUniform: g0.Uniforms, pScreenUniform: g0.Uniforms,
   textures: g0.Texture[], framebuffer: WebGLFramebuffer,
-  viewSize: Vec2, cx2d:CanvasRenderingContext2D,
+  viewSize: Vec2, cx2d: CanvasRenderingContext2D,
   notifications: Notification[] = [],
   smoothScore = 0;
 
-export function notify(text:string){
-  notifications.push({text, at:[viewSize[X]*(Math.random()*0.2+0.4), viewSize[Y]/2]});
+export let O: HTMLDivElement;
+
+export function notify(text: string, importance = 1) {
+  notifications.push({ text, at: [viewSize[X] * (Math.random() * 0.2 + 0.4), viewSize[Y] / 2], importance });
 }
 
 export function init(size: Vec2) {
   let C = document.getElementById("C") as HTMLCanvasElement;
   let D = document.getElementById("D") as HTMLCanvasElement;
+  O = document.getElementById("O") as HTMLDivElement;
 
   viewSize = size;
 
   C.width = D.width = viewSize[X];
   C.height = D.height = viewSize[Y];
-  D.style.marginTop = `${-viewSize[Y]}px`;
+  //C.style.maxHeight = D.style.maxHeight = `0`;
+  //C.style.overflow = D.style.overflow = "visible";
+  O.style.marginTop = D.style.marginTop = `${-viewSize[Y]}px`;
+
+  C.style.width = D.style.width = O.style.width = `${viewSize[X]}px`;
+  C.style.height = D.style.height = O.style.height = `${viewSize[Y]}px`;
 
   g0.context(C);
 
@@ -51,51 +58,51 @@ export function init(size: Vec2) {
 
   framebuffer = g0.framebuffer(textures);
 
-  return [pMain, C] as [WebGLProgram, HTMLCanvasElement]
+  return [C, O] as [HTMLCanvasElement, HTMLDivElement]
 }
 
-const crashPoints: Vec3[] = [[-1, 1, -1], [1, 1, -1], [0, 1, -1]];
+const crashPoints: Vec3[] = [[-.8, 1, -1], [.8, 1, -1], [0, 1, -1]];
 
 let rng = RNG(1);
 
-function write(text:string, x:number, y:number){
+function write(text: string, x: number, y: number) {
   cx2d.fillText(text, x, y);
   cx2d.strokeText(text, x, y);
 }
 
 export function frame(gs: game.GameState,
   [bufs, elements]: [g0.ShapeBuffers, Elements],
-  [bufsF, elementsF]: [g0.ShapeBuffers, Elements], dTime:number) {
+  [bufsF, elementsF]: [g0.ShapeBuffers, Elements], dTime: number) {
   //I.innerHTML = `LMB click to speed up, RMB to speed down. consuming ${gs.consumingStage} | ${gs.at.map(v => ~~v)} | ${crashPixel[0]};${crashPixel[1]};${crashPixel[2]}`;
 
-  cx2d.clearRect(0,0,viewSize[X], viewSize[Y]);
+  cx2d.clearRect(0, 0, viewSize[X], viewSize[Y]);
 
-  if(gs.combo){
-    cx2d.textAlign="center";
+  if (gs.combo) {
+    cx2d.textAlign = "center";
     cx2d.font = "bold 32pt sans-serif";
-    write(`x${game.comboMultiplier().toFixed(1)}`, viewSize[X]-85, 100);  
+    write(`x${game.comboMultiplier().toFixed(1)}`, viewSize[X] - 85, 100);
 
-    smoothScore = Math.min(gs.score, smoothScore + Math.max((gs.score - smoothScore)/10,dTime*10))
-    write(`${smoothScore.toFixed()}`, viewSize[X]/2, 40);  
+    smoothScore = Math.min(gs.score, smoothScore + Math.max((gs.score - smoothScore) / 10, dTime * 10))
+    write(`${smoothScore.toFixed()}`, viewSize[X] / 2, 40);
 
-    cx2d.textAlign="right";
+    cx2d.textAlign = "right";
 
     cx2d.font = "bold 16pt Courier";
-    write(`speed`, viewSize[X]-10, 200);  
-    write(`clean city`, viewSize[X]-10, 250);  
+    write(`speed`, viewSize[X] - 10, 200);
+    write(`clean city`, viewSize[X] - 10, 250);
 
     cx2d.font = "bold 20pt Courier";
-    write(`x${game.speedMultiplier().toFixed(1)}`, viewSize[X]-10, 220);  
-    write(`x${game.cleanCityMultiplier().toFixed(1)}`, viewSize[X]-10, 270);  
+    write(`x${game.speedMultiplier().toFixed(1)}`, viewSize[X] - 10, 220);
+    write(`x${game.cleanCityMultiplier().toFixed(1)}`, viewSize[X] - 10, 270);
   }
 
   cx2d.font = "bold 32pt Courier";
-  for(let n of notifications){
+  for (let n of notifications) {
     write(n.text, n.at[X], n.at[Y]);
-    n.at[Y] -= dTime*300;
-  }  
+    n.at[Y] -= dTime * 300 / (n.importance || 1);
+  }
 
-  I.innerHTML = `cs ${gs.consuming} ${gs.consumingStage} ${game.relativeTimeout()} combo ${gs.combo} debris left ${gs.debrisLeft} speed bonus ${game.speedMultiplier()} timeout ${gs.timeout} timeout speed ${gs.timeoutSpeed} `;
+  //I.innerHTML = `cs ${gs.consuming} ${gs.consumingStage} ${game.relativeTimeout()} combo ${gs.combo} debris left ${gs.debrisLeft} speed bonus ${game.speedMultiplier()} timeout ${gs.timeout} timeout speed ${gs.timeoutSpeed} `;
 
   let time = gs.time;
   let [camera, perspective, look] = m4.viewMatrices(
@@ -107,7 +114,7 @@ export function frame(gs: game.GameState,
     //[4, 5000]
   );
 
-  
+
   let invCamera = m4.inverse(camera);
 
   let flyer = m4.lookTo(gs.at, gs.dir, [0, 0, 1]);
@@ -160,7 +167,7 @@ export function frame(gs: game.GameState,
   g0.setUniforms(pScreenUniform, {
     invCamera, flyer, time, invPerspective: m4.inverse(perspective),
     timeout: game.relativeTimeout(),
-    viewSize : [viewSize[X], viewSize[Y], 0],
+    viewSize: [viewSize[X], viewSize[Y], 0],
     scp0: screenCrashPoints[0], scp1: screenCrashPoints[1], scp2: screenCrashPoints[2]
   })
 
@@ -182,4 +189,46 @@ async function checkCrash(screenCrashPoints: Vec3[]) {
   await Promise.all(rangef(3, n =>
     g0.readPixelsAsync(screenCrashPoints[n][X], screenCrashPoints[n][Y], 1, 1, gc.RGBA, gc.UNSIGNED_BYTE, crashPixel[n])
   ));
+}
+
+export function renderUI(gs: game.GameState) {
+  if (!gs) {
+    O.style.visibility = "hidden";
+    return;
+  }
+
+  O.style.visibility = "visible";
+
+  let saves = [];
+  for (let slot = 0; slot < 10; slot++) {
+    let save = localStorage["warpStation13K-" + slot];
+    if (!save && slot > 0)
+      break;
+    let parsed = save ? JSON.parse(save) : {};
+    saves.push(`${parsed.score || "0"}pts ${parsed.date || ""}`)
+  }
+  if(saves.length<10)
+    saves.push('New Save')
+
+  O.innerHTML = `
+  <H1>Warp Station 13K</H1>
+  <p>Score: ${gs.score}/${game.scoreForNextLevel()} Level: ${gs.level} Upgrade points: ${gs.points}</p>
+  <H3>Upgrades</H3>
+    ${game.UpgradeNames.map((v, i) =>
+    `
+      <span class="u">${v}</span>
+      <button id="down_${i}">-</button>
+      <span class="up">${gs.upgrades[i]}</span>
+      <button id="up_${i}">+</button><br/>`
+  ).join("")}
+  <H3>Saves</H3>
+  <button id="new">New Game</button><br/><br/>
+  ${saves.map((v, i) => `
+  <div>    
+    <button style="visibility:${i != 0?'':'hidden'}" id="save_${i}">Save</button>
+    <span class="si">${i ? i : "Auto"}</span>
+    <span class="st">${v}</span>    
+    <button style="visibility:${v != "New Save"?'':'hidden'}" id="load_${i}" class="lb">Load</button>
+    </div>
+  `).join("")}`
 }

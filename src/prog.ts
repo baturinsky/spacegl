@@ -9,7 +9,7 @@ import * as snd from "./sound";
 import { range, rangef } from "./g0/misc";
 import { gl, putShapesInElementBuffers, setAttrDatabuffers } from "./g0/gl";
 
-let noiseGain:GainNode, noiseVol = 1;
+let noiseGain: GainNode, noiseVol = 1;
 
 const attributes = { at: [3], norm: [3], cell: [3], type: [4], shape: [1], up: [3] };
 
@@ -19,13 +19,13 @@ function main() {
 
   let startTime = Date.now();
 
-  let [world, flyer, debris] = initGeometry();
+  let [world, flyer] = initGeometry();
 
-  let [pMain, C] = render.init(viewSize);
+  let [C, O] = render.init(viewSize);
 
   game.initControls();
-  let state = game.init(debris);
-  
+  let gs = game.init();
+
   let [bufs, elements] = putShapesInElementBuffers(world, attributes);
   let [bufsF, elementsF] = putShapesInElementBuffers(flyer, attributes);
 
@@ -35,18 +35,19 @@ function main() {
 
   function update(dTime: number) {
     game.update(dTime);
-    render.frame(state, [bufs, elements], [bufsF, elementsF], dTime);
-    if(noiseGain){
-      noiseGain.gain.value = state.vel * noiseVol * 0.7;
-      if(dTime*state.vel*10 > Math.random()){
+    render.frame(gs, [bufs, elements], [bufsF, elementsF], dTime);
+    if (noiseGain) {
+      noiseGain.gain.value = gs.vel * noiseVol * 0.7;
+      if (dTime * gs.vel * 10 > Math.random()) {
         noiseVol = .5 + Math.random();
       }
-      noiseVol = noiseVol * (1-dTime) + dTime;
+      noiseVol = noiseVol * (1 - dTime) + dTime;
     }
     t++;
   }
 
   let started = false;
+
   C.onclick = e => {
     togglePlaying(true);
     if (!started) {
@@ -64,10 +65,51 @@ function main() {
     started = true;
   }
 
+  O.onclick = e => {
+    let id = (e.target as HTMLElement).id;
+    let [cmd, n] = id.split("_") as [string, number];
+    switch (cmd) {
+      case "up":
+        if (gs.points > 0) {
+          gs.upgrades[n]++;
+          gs.points--;
+        }
+        break;
+      case "down":
+        if (gs.upgrades[n] > 0) {
+          gs.upgrades[n]--;
+          gs.points++;
+        }
+        break;
+      case "save":
+        saveToSlot(n);
+        break;
+      case "load":
+        loadSlot(n);
+        render.renderUI(null);
+        update(0);
+        setTimeout(() => togglePlaying(true), 10)
+        break;
+      case "new":
+        game.init();
+        render.renderUI(null);
+        update(0);
+        setTimeout(() => togglePlaying(true), 10)
+        break;
+    }
+    render.renderUI(gs);
+  }
+
   document.onkeydown = e => {
     switch (e.code) {
       case "Space":
         togglePlaying();
+        break;
+      case "KeyS":
+        saveToSlot(0);
+        break;
+      case "KeyL":
+        loadSlot(0);
         break;
     }
   }
@@ -80,16 +122,28 @@ function main() {
     if (on == null)
       on = !playing();
 
-    if (on){
+    if (on) {
       C.requestPointerLock();
+      render.renderUI(null);
     } else {
       document.exitPointerLock();
-      noiseGain.gain.value = 0;
+      if (noiseGain)
+        noiseGain.gain.value = 0;
+      render.renderUI(gs);
     }
   }
 
+  loadSlot(0);
   update(0);
 
+  togglePlaying(false);
+}
+
+
+let settings = localStorage.warpStation13K || { slot: 0 };
+
+function storeSettings() {
+  localStorage.warpStation13K = settings;
 }
 
 function testSound() {
@@ -100,6 +154,15 @@ function testSound() {
     snd.play2()
   }
 }
+
+export function saveToSlot(slot: number) {
+  localStorage["warpStation13K-" + slot] = game.save();
+}
+
+export function loadSlot(slot: number) {
+  game.load(localStorage["warpStation13K-" + slot]);
+}
+
 
 main();
 

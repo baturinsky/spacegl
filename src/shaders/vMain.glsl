@@ -77,16 +77,6 @@ void main() {
     }
   }
 
-  //int si = int(shape);
-
-  /*if(vshape > 0)
-    //vcolor.rgb = vec3(shape/10000., mod(shape,100.)/100., mod(shape,10.)/10.) * 1.5;
-    vcolor.rgb = vec3(1.);
-  else
-    vcolor.rgb = vec3(.9);*/
-  //color = vec4(1., 1., 0., 1.);
-
-
   if(vtype.x == 3) {
     at4 = flyer * at4;
     mat4 fnorm = flyer;
@@ -119,7 +109,6 @@ void main() {
   pos.y = -pos.y;
 
   vec3 toSun = sun - vat;
-  //vec3 toSun = vec3(0, 1000, 0);
   light = dot(vnorm, normalize(toSun)) * 0.2 + .9 - length(toSun) * 1e-6;
 
   if(vtype.x == 7) {

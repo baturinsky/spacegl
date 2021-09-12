@@ -149,6 +149,8 @@ export function play2() {
 }
 
 export function node(note: number, dur = 3, vol=1) {
+  if(!ax)
+    return;
   let [o, g] = og();
   g.gain.setValueAtTime(volume * vol * 44 / key(note), ax.currentTime);
   o.frequency.setValueAtTime(key(note), ax.currentTime);

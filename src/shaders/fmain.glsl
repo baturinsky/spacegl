@@ -1,6 +1,3 @@
-uniform float time;
-uniform float pass;
-
 in vec3 vcell;
 in vec3 vat;
 in float dist;
@@ -10,7 +7,6 @@ flat in vec3 vnorm;
 flat in vec4 vcolor;
 
 flat in ivec4 vtype;
-flat in int vshape;
 
 layout(location = 0) out vec4 c0;
 layout(location = 1) out vec4 c1;
@@ -24,12 +20,10 @@ int hex2Digit(int n, int place) {
 }
 
 void main() {
-  //vec4 worldAt = 
   int itype = vtype.x;
   int t1 = vtype.y;
   int t2 = vtype.z;
   float bright = light;
-  //vt = 2.0101000000;
   if(itype == 2) {
     float hm = hexDigitF(t2, 0);
     float vm = hexDigitF(t2, 1);
@@ -39,7 +33,6 @@ void main() {
     float far = 0., near = 0.;
 
     if(dist >= 500.) {
-      //bright *= float(vtype.a)/256.;
       far = x > hm &&
         x < 1. - hm &&
         y > vm &&
@@ -70,20 +63,12 @@ void main() {
 
   if(itype == 7) {
     float y = fract(vcell.y);
-    bright += y < 0.03 || y > 0.97 || y>0.49 && y<0.51/* || mod(vcell.x,3. + sin(floor(vcell.y)*100.)) < 0.03*/? -.5 : .0;
+    bright += y < 0.03 || y > 0.97 || y>0.49 && y<0.51? -.5 : .0;
   }
 
   if(bright > 0.)
     bright += vcell.y * 0.05 - 0.3;
-  /*if(mod(vcell.x,0.2)<0.1 != mod(vcell.y,0.2)<0.1)
-    light /= 2.;*/
-  //c0 = vec4(light, 0., 0., 1.);
+
   c0 = vec4(vcolor.rgb * bright, vcolor.a);
-  //c1 = vec4(gl_FrontFacing?0.:1.,0.,0.,0.);
-  //c1 = vec4(vat / 1000. + 0.5, 1.);
-  //c1 = vec4(1.,0.,0.,1.);
-  //if(pass == 0.)
-  //c1 = vec4(gl_FragCoord.xyz * gl_FragCoord.w, 1.);
-  //c1 = vec4(vnorm, 1.);
   c1 = vec4(vnorm*0.5+0.5, gl_FragCoord.z * gl_FragCoord.w);
 }

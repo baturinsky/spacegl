@@ -1,8 +1,47 @@
+<style>
+  #O * {
+    color: #fff;    
+    font-family: 'Courier New', Courier, monospace;
+  }
+  button{
+    border: solid 1px #fff;
+    background-color: #000;
+    cursor: pointer;    
+    pointer-events: all; 
+    font-size: 24px;
+  }
+  button:hover{
+    background-color: #222;
+  }
+  .u {
+    min-width: 400px;
+  }
+  .si{
+    min-width: 50px;
+  }
+  .st{
+    min-width: 350px;
+  }
+  .lb{
+    min-width: 200px;
+  }
+  span {
+    display: inline-block;
+    text-align: center;
+  }
+  .up {
+    font-size: 24px;
+    width: 40px;
+  }
+</style>
+
 <div style="text-align: center;">
-  <div>    
+  <div style="display: flex; flex-direction: column; align-items: center;">    
     <canvas id=C></canvas>
     <canvas id=D style="pointer-events: none;"></canvas>
+    <div id=O style="z-index: 1; pointer-events: none; background: rgba(0, 0, 0, 0.8); color:#fff">
+    </div>
   </div>
-  <div id=I></div>
+  <div id=I>[LMB] to accelerate [RMB] to slow down [Space] to toggle menu</div>
 </div>
 <script src="bundle.js"></script>

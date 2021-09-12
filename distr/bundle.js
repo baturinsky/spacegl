@@ -473,7 +473,6 @@ ${body}`;
     const u = {};
     for (let i = 0; i < gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS); ++i) {
       const info = gl.getActiveUniform(p, i);
-      console.log(info);
       let suffix = uniformTypes[info.type] || "i";
       const loc = gl.getUniformLocation(p, info.name);
       let f = info.size > 1 ? (args) => {
@@ -580,6 +579,7 @@ ${body}`;
   var cityColGap = cityRadius * PI2 / cityCols;
   var ShipsNumber = 150;
   var MaxDebris = 30 * 64;
+  var debris = [];
   function initGeometry() {
     let rng4 = RNG(1);
     let buildings = generateCity(rng4);
@@ -596,7 +596,6 @@ ${body}`;
       ts(ship, axisRotation([0, 1, 0], PIH + (sector < 3 ? PI : 0)), scaling(rng4(5) + 2), translation([0, 0, cityRadius * (0.35 + rng4() * 0.15)]), axisRotation([0, 1, 0], sector * PI2 / 6 + PI2 * 5 / 12 + rng4() * 0.2 - 0.1));
       solid.push(ship);
     }
-    let debris = [];
     while (debris.length < MaxDebris) {
       let building = buildings[rng4(buildings.length)];
       if (building && building.height * rng4() < building.density && building.density > 0.4) {
@@ -631,7 +630,7 @@ ${body}`;
       s.common = s.common || {};
       s.common.shape = s.common.shape || i;
     }
-    return [solid, passable, debris];
+    return [solid, passable];
   }
   function flyerGeometry() {
     let wing = towerMesh(smoothPolyFixed([[0, -4], [6, -5], [0, 4], [-6, -5]], 2), [[0, 0], [0.8, 0], [1, 0.5], [1, 1], [0.8, 1.1], [0, 1.1]]);
@@ -641,11 +640,13 @@ ${body}`;
     let engine2 = clone(engine);
     ts(engine2, reflection([1, 0, 0]));
     invert(engine2);
-    let body = towerMesh(smoothPolyFixed([[1, -4], [1, 7], [0, 10], [-1, 7], [-1, -4]], 1), [[0, 1], [0.8, 1], [1, 2], [1, 3], [0.4, 4], [0, 4]]);
-    ts(body, translation([0, 2, 3.5]));
-    let flyer = combine2([body, wing, engine, engine2]);
+    let body = towerMesh(rangef(32, revolutionShader(32)), [[0, 0], [3.9, 0], [4, 0.1], [4, 0.9], [3.9, 1], [0, 1]]);
+    ts(body, translation([0, 2.5, 5.5]));
+    let body2 = towerMesh(rangef(32, revolutionShader(32)), [[0, 0], [0.9, 0], [1, 0.1], [1, 0.9], [0.9, 1], [0, 1]]);
+    ts(body2, translation([0, 4, 6]));
+    let flyer = combine2([body, body2, wing, engine, engine2]);
     flyer.common = {type: [FLYER, 0, 0, 0]};
-    ts(flyer, scaling(0.2), axisRotation([0, -1, 0], Math.PI), axisRotation([-1, 0, 0], Math.PI / 2), translation([0, 2, 0]));
+    ts(flyer, scaling(0.18), axisRotation([0, -1, 0], Math.PI), axisRotation([-1, 0, 0], Math.PI / 2), translation([0, 2, 0]));
     return flyer;
   }
   function generateCity(rng4) {
@@ -839,16 +840,16 @@ ${body}`;
   }
 
   // src/shaders/fMain.glsl
-  var fMain_default = "uniform float time;\nuniform float pass;\n\nin vec3 vcell;\nin vec3 vat;\nin float dist;\n\nflat in float light;\nflat in vec3 vnorm;\nflat in vec4 vcolor;\n\nflat in ivec4 vtype;\nflat in int vshape;\n\nlayout(location = 0) out vec4 c0;\nlayout(location = 1) out vec4 c1;\n\nfloat hexDigitF(int n, int place) {\n  return float((n >> (place * 4)) & 15) / 15.;\n}\n\nint hex2Digit(int n, int place) {\n  return (n >> (place * 8)) % 256;\n}\n\nvoid main() {\n  //vec4 worldAt = \n  int itype = vtype.x;\n  int t1 = vtype.y;\n  int t2 = vtype.z;\n  float bright = light;\n  //vt = 2.0101000000;\n  if(itype == 2) {\n    float hm = hexDigitF(t2, 0);\n    float vm = hexDigitF(t2, 1);\n    float x = fract(vcell.x);\n    float y = fract(vcell.y);\n\n    float far = 0., near = 0.;\n\n    if(dist >= 500.) {\n      //bright *= float(vtype.a)/256.;\n      far = x > hm &&\n        x < 1. - hm &&\n        y > vm &&\n        y < 1. - vm ? -float(vtype.a) / 256. : .0;\n    }\n\n    if(dist <= 700.) {\n      float cols = float(hex2Digit(t1, 1));\n      float rows = float(hex2Digit(t1, 0));\n      float hb = hexDigitF(t2, 2);\n      float vb = hexDigitF(t2, 3);\n      near = x > hm &&\n        x < 1. - hm &&\n        y > vm &&\n        y < 1. - vm &&\n        (cols == 1. || fract((x - hm) / (1. - hm * 2.) * cols) > hb) &&\n        (rows == 1. || fract((y - vm) / (1. - vm * 2.) * rows) > vb) ? -1. : .0;\n    }\n\n    float l = clamp((dist - 500.) / 200., 0., 1.);\n    bright += mix(near, far, l);\n\n  } else if(itype == 4) {\n    bright += vat.z * 5e-4 + (fract(vat.y / 40. + 0.55) < .1 || fract(atan(vat.x, vat.z) / 3.141 * 36. + 0.45) < .1 ? -1. : 0.);\n  } else if(itype == 5) {\n    bright = 2.;\n  }\n\n  if(itype == 7) {\n    float y = fract(vcell.y);\n    bright += y < 0.03 || y > 0.97 || y>0.49 && y<0.51/* || mod(vcell.x,3. + sin(floor(vcell.y)*100.)) < 0.03*/? -.5 : .0;\n  }\n\n  if(bright > 0.)\n    bright += vcell.y * 0.05 - 0.3;\n  /*if(mod(vcell.x,0.2)<0.1 != mod(vcell.y,0.2)<0.1)\n    light /= 2.;*/\n  //c0 = vec4(light, 0., 0., 1.);\n  c0 = vec4(vcolor.rgb * bright, vcolor.a);\n  //c1 = vec4(gl_FrontFacing?0.:1.,0.,0.,0.);\n  //c1 = vec4(vat / 1000. + 0.5, 1.);\n  //c1 = vec4(1.,0.,0.,1.);\n  //if(pass == 0.)\n  //c1 = vec4(gl_FragCoord.xyz * gl_FragCoord.w, 1.);\n  //c1 = vec4(vnorm, 1.);\n  c1 = vec4(vnorm*0.5+0.5, gl_FragCoord.z * gl_FragCoord.w);\n}\n";
+  var fMain_default = "in vec3 vcell;\nin vec3 vat;\nin float dist;\n\nflat in float light;\nflat in vec3 vnorm;\nflat in vec4 vcolor;\n\nflat in ivec4 vtype;\n\nlayout(location = 0) out vec4 c0;\nlayout(location = 1) out vec4 c1;\n\nfloat hexDigitF(int n, int place) {\n  return float((n >> (place * 4)) & 15) / 15.;\n}\n\nint hex2Digit(int n, int place) {\n  return (n >> (place * 8)) % 256;\n}\n\nvoid main() {\n  int itype = vtype.x;\n  int t1 = vtype.y;\n  int t2 = vtype.z;\n  float bright = light;\n  if(itype == 2) {\n    float hm = hexDigitF(t2, 0);\n    float vm = hexDigitF(t2, 1);\n    float x = fract(vcell.x);\n    float y = fract(vcell.y);\n\n    float far = 0., near = 0.;\n\n    if(dist >= 500.) {\n      far = x > hm &&\n        x < 1. - hm &&\n        y > vm &&\n        y < 1. - vm ? -float(vtype.a) / 256. : .0;\n    }\n\n    if(dist <= 700.) {\n      float cols = float(hex2Digit(t1, 1));\n      float rows = float(hex2Digit(t1, 0));\n      float hb = hexDigitF(t2, 2);\n      float vb = hexDigitF(t2, 3);\n      near = x > hm &&\n        x < 1. - hm &&\n        y > vm &&\n        y < 1. - vm &&\n        (cols == 1. || fract((x - hm) / (1. - hm * 2.) * cols) > hb) &&\n        (rows == 1. || fract((y - vm) / (1. - vm * 2.) * rows) > vb) ? -1. : .0;\n    }\n\n    float l = clamp((dist - 500.) / 200., 0., 1.);\n    bright += mix(near, far, l);\n\n  } else if(itype == 4) {\n    bright += vat.z * 5e-4 + (fract(vat.y / 40. + 0.55) < .1 || fract(atan(vat.x, vat.z) / 3.141 * 36. + 0.45) < .1 ? -1. : 0.);\n  } else if(itype == 5) {\n    bright = 2.;\n  }\n\n  if(itype == 7) {\n    float y = fract(vcell.y);\n    bright += y < 0.03 || y > 0.97 || y>0.49 && y<0.51? -.5 : .0;\n  }\n\n  if(bright > 0.)\n    bright += vcell.y * 0.05 - 0.3;\n\n  c0 = vec4(vcolor.rgb * bright, vcolor.a);\n  c1 = vec4(vnorm*0.5+0.5, gl_FragCoord.z * gl_FragCoord.w);\n}\n";
 
   // src/shaders/fScreen.glsl
-  var fScreen_default = "uniform sampler2D T0;\nuniform sampler2D T1;\nuniform sampler2D Depth;\nuniform mat4 invCamera;\nuniform mat4 invPerspective;\nuniform mat4 flyer;\nuniform vec3 viewSize;\nuniform vec3 scp0;\nuniform vec3 scp1;\nuniform vec3 scp2;\nuniform float timeout;\n\nin vec2 uv;\n\nout vec4 color;\n\nfloat Noise2d(in vec2 x) {\n  float xhash = cos(x.x * 37.0);\n  float yhash = cos(x.y * 57.0);\n  return fract(415.92653 * (xhash + yhash));\n}\n\nint b16[16] = int[] (1, 9, 3, 11, 13, 5, 15, 7, 4, 12, 2, 10, 16, 8, 14, 6);\nint b64[64] = int[] (1, 33, 9, 41, 3, 35, 11, 43, 49, 17, 57, 25, 51, 19, 59, 27, 13, 45, 5, 37, 15, 47, 7, 39, 61, 29, 53, 21, 63, 31, 55, 23, 4, 36, 12, 44, 2, 34, 10, 42, 52, 20, 60, 28, 50, 18, 58, 26, 16, 48, 8, 40, 14, 46, 6, 38, 64, 32, 56, 24, 62, 30, 54, 22);\n\nfloat dither(float v, ivec2 F) {\n  return v * 75. > float(b64[F.y % 8 * 8 + F.x % 8]) ? 1. : 0.;\n}\n\nconst bool ditherOn = true;\nconst float collisionDepth = 0.6;\n\nvoid main() {\n\n  ivec2 F = ivec2(gl_FragCoord.xy);\n\n  float depth = texelFetch(Depth, F, 0).r;\n  color = vec4(1.);\n\n  vec4 screenPos = vec4(uv.x, -uv.y, depth * 2. - 1., 1.);\n\n  vec4 pos4 = invCamera * screenPos;\n  vec3 pos = (pos4 / pos4.w).xyz - flyer[3].xyz;\n\n  /*if(distance(vec2(scp0.x, scp0.y), vec2(F)) < 10.) {\n    color = vec4(1., 0., 0., 1.);\n    return;\n  }\n\n  if(distance(vec2(scp1.x, scp1.y), vec2(F)) < 10.) {\n    color = vec4(0., 1., 0., 1.);\n    return;\n  }\n\n  if(distance(vec2(scp2.x, scp2.y), vec2(F)) < 10.) {\n    color = vec4(0., 0., 1., 1.);\n    return;\n  }*/\n\n  /*if(F.y < 4 && F.x < 4) {\n    color = vec4(texelFetch(Depth, ivec2(scp0.xy), 0).r < collisionDepth ? 1. : 0., texelFetch(Depth, ivec2(scp1.xy), 0).r < collisionDepth ? 1. : 0., texelFetch(Depth, ivec2(scp2.xy), 0).r < collisionDepth ? 1. : 0., 1.);\n    return;\n  }*/\n\n  color = texelFetch(T0, F, 0);\n\n  float r = 75.;\n  bool ui = false;\n\n  vec2 cntr = vec2(viewSize.x-r-10., viewSize.y - r-10.);\n  vec2 dif = cntr - gl_FragCoord.xy;\n  float l = length(dif);\n  if(l < r) {\n    float a = atan(-dif.x, dif.y);\n    if(l>r*.7 && l<r && timeout > 0.){\n      ui = true;\n      color.xyz = a / 6.282 + 0.5 > timeout ? vec3(.01):vec3(1.);\n    }\n  }\n\n  if(depth == 1. && !ui) {\n\n    vec3 pos1 = pos / length(pos);\n\n    if(Noise2d(vec2(floor((pos1.x + pos1.y) * 3e2), floor(pos1.z * 3e2))) > 0.99)\n      color.xyz = pos1 * 0.5 + 0.5;\n    else\n      color.xyz = vec3(0.);\n\n  } else {\n\n    if(color.r > 0.)\n      color = (color * 2. + texelFetch(T0, F + ivec2(1, 0), 0) + texelFetch(T0, F + ivec2(0, 1), 0)) * 0.25;\n\n    float diff = 0.;\n    for(int i = 0; i < 8; i++) {\n      int step = i / 4;\n      ivec2 place = ivec2(i % 2, i % 4 / 2) * step;\n      float edge = texelFetch(Depth, F + place, 0).r +\n        texelFetch(Depth, F - place, 0).r - depth * 2.;\n      diff += abs(edge);\n    }\n\n    if(depth > 0.99)\n      diff *= 1. + (depth - 0.99);\n\n    if(diff > .00005) {\n      color.rgb = normalize(color.rgb) * 0.3;\n    } else {\n      if(ditherOn) {\n        color.r = dither(color.r, F);\n        color.g = dither(color.g, F);\n        color.b = dither(color.b, F);\n      }\n    }\n\n    if(depth > 0.995 && (depth - 0.99) * 1000. > float(b64[F.y % 8 * 8 + F.x % 8])) {\n      color = vec4(1.);\n    }\n  }\n\n  //color = texelFetch(T1, F, 0);\n  color.a = 1.;\n}";
+  var fScreen_default = "uniform sampler2D T0;\nuniform sampler2D T1;\nuniform sampler2D Depth;\nuniform mat4 invCamera;\nuniform mat4 invPerspective;\nuniform mat4 flyer;\nuniform vec3 viewSize;\nuniform vec3 scp0;\nuniform vec3 scp1;\nuniform vec3 scp2;\nuniform float timeout;\n\nin vec2 uv;\n\nout vec4 color;\n\nfloat Noise2d(in vec2 x) {\n  float xhash = cos(x.x * 37.0);\n  float yhash = cos(x.y * 57.0);\n  return fract(415.92653 * (xhash + yhash));\n}\n\nint b64[64] = int[] (1, 33, 9, 41, 3, 35, 11, 43, 49, 17, 57, 25, 51, 19, 59, 27, 13, 45, 5, 37, 15, 47, 7, 39, 61, 29, 53, 21, 63, 31, 55, 23, 4, 36, 12, 44, 2, 34, 10, 42, 52, 20, 60, 28, 50, 18, 58, 26, 16, 48, 8, 40, 14, 46, 6, 38, 64, 32, 56, 24, 62, 30, 54, 22);\n\nfloat dither(float v, ivec2 F) {\n  return v * 75. > float(b64[F.y % 8 * 8 + F.x % 8]) ? 1. : 0.;\n}\n\nconst bool ditherOn = true;\nconst float collisionDepth = 0.6;\n\nvoid main() {\n\n  ivec2 F = ivec2(gl_FragCoord.xy);\n\n  float depth = texelFetch(Depth, F, 0).r;\n  color = vec4(1.);\n\n  vec4 screenPos = vec4(uv.x, -uv.y, depth * 2. - 1., 1.);\n\n  vec4 pos4 = invCamera * screenPos;\n  vec3 pos = (pos4 / pos4.w).xyz - flyer[3].xyz;\n\n  color = texelFetch(T0, F, 0);\n\n  float r = 75.;\n  bool ui = false;\n\n  vec2 cntr = vec2(viewSize.x-r-10., viewSize.y - r-10.);\n  vec2 dif = cntr - gl_FragCoord.xy;\n  float l = length(dif);\n  if(l < r) {\n    float a = atan(-dif.x, dif.y);\n    if(l>r*.7 && l<r && timeout > 0.){\n      ui = true;\n      color.xyz = a / 6.282 + 0.5 > timeout ? vec3(.01):vec3(1.);\n    }\n  }\n\n  if(depth == 1. && !ui) {\n\n    vec3 pos1 = pos / length(pos);\n\n    if(Noise2d(vec2(floor((pos1.x + pos1.y) * 3e2), floor(pos1.z * 3e2))) > 0.99)\n      color.xyz = pos1 * 0.5 + 0.5;\n    else\n      color.xyz = vec3(0.);\n\n  } else {\n\n    if(color.r > 0.)\n      color = (color * 2. + texelFetch(T0, F + ivec2(1, 0), 0) + texelFetch(T0, F + ivec2(0, 1), 0)) * 0.25;\n\n    float diff = 0.;\n    for(int i = 0; i < 8; i++) {\n      int step = i / 4;\n      ivec2 place = ivec2(i % 2, i % 4 / 2) * step;\n      float edge = texelFetch(Depth, F + place, 0).r +\n        texelFetch(Depth, F - place, 0).r - depth * 2.;\n      diff += abs(edge);\n    }\n\n    diff *= depth;\n\n    if(diff > .00007) {\n      color.rgb = normalize(color.rgb) * 0.3;\n    } else {\n      if(ditherOn) {\n        color.r = dither(color.r, F);\n        color.g = dither(color.g, F);\n        color.b = dither(color.b, F);\n      }\n    }\n\n    if(depth > 0.995 && (depth - 0.99) * 1000. > float(b64[F.y % 8 * 8 + F.x % 8])) {\n      color = vec4(1.);\n    }\n  }\n\n  //color = texelFetch(T1, F, 0);\n  color.a = 1.;\n}";
 
   // src/shaders/vScreenQuad.glsl
-  var vScreenQuad_default = "out vec2 uv;\n\nvoid main() {\n  int i = gl_VertexID;\n  ivec2 uvi = ivec2(i % 2, (i + 1) % 4 / 2) * 2 - 1;\n  gl_Position = vec4(uvi.x, uvi.y, 0, 1);\n  uv = vec2(uvi);\n  //gl_Position = vec4(i%2*2-1, 1-(i+1)%4/2*2, 0., 1.);\n}";
+  var vScreenQuad_default = "out vec2 uv;\n\nvoid main() {\n  int i = gl_VertexID;\n  ivec2 uvi = ivec2(i % 2, (i + 1) % 4 / 2) * 2 - 1;\n  gl_Position = vec4(uvi.x, uvi.y, 0, 1);\n  uv = vec2(uvi);\n}";
 
   // src/shaders/vMain.glsl
-  var vMain_default = "uniform mat4 camera;\r\nuniform mat4 flyer;\r\nuniform vec3 sun;\r\nuniform float time;\r\nuniform int consuming;\r\nuniform float consumingStage;\r\n\r\nuniform int liveDebris[32];\r\n\r\nin vec3 at;\r\nin vec3 up;\r\nin vec3 norm;\r\nin vec3 cell;\r\nin vec4 type;\r\nin float shape;\r\n\r\nout vec3 vcell;\r\nout vec3 vat;\r\nout float dist;\r\nflat out float light;\r\n\r\nflat out vec3 vnorm;\r\nflat out vec4 vcolor;\r\n\r\nflat out ivec4 vtype;\r\nflat out int vshape;\r\n\r\nfloat rand(float n){return fract(sin(n) * 43758.5453123);}\r\n\r\nmat4 axisRotation(vec3 axis, float angle) {\r\n\r\n  float x = axis.x;\r\n  float y = axis.y;\r\n  float z = axis.z;\r\n\r\n  float n = sqrt(x * x + y * y + z * z);\r\n  x /= n;\r\n  y /= n;\r\n  z /= n;\r\n  float c = cos(angle);\r\n  float s = sin(angle);\r\n  float omc = 1. - c;\r\n\r\n  return mat4(x * x + (1. - x * x) * c, x * y * omc + z * s, x * z * omc - y * s, 0., x * y * omc - z * s, y * y + (1. - y * y) * c, y * z * omc + x * s, 0., x * z * omc + y * s, y * z * omc - x * s, z * z + (1. - z * z) * c, 0., 0., 0., 0., 1.);\r\n}\r\n\r\nvoid main() {\r\n  vat = at;\r\n  vnorm = norm;\r\n  vcell = cell;\r\n\r\n  vtype = ivec4(type);\r\n  vshape = int(shape);\r\n\r\n  vec4 at4 = vec4(at+up*0., 1.);\r\n\r\n  vcolor.rgb = vec3(1.);\r\n\r\n  if(vtype.x == 9) {\r\n    int swarm = vshape/32;\r\n    bool live = (liveDebris[swarm/30] & (1 << swarm%30)) != 0;\r\n    if(live || consuming == swarm){\r\n      vcolor.rgb = vec3(1.,0.,1.);\r\n      float a = rand(shape);\r\n      vec3 axis = normalize(vec3(rand(a+1.), rand(a+2.), rand(a+3.)));\r\n      light -= a*0.3; \r\n      mat4 rot = axisRotation(axis, time * 5. * (.5+rand(a+4.)) + rand(a+4.) );\r\n      vnorm = normalize((rot * vec4(norm, 1.)).xyz);\r\n      at4 = rot * at4;\r\n      at4.xyz += 25. * (vec3(rand(a+5.), rand(a+6.), rand(a+7.)) - .5);\r\n      at4.xyz += vec3(vtype.yzw);\r\n      at4.xyz += up * sin(float(swarm) + time*0.1) * 20.;\r\n      if(consuming == swarm)\r\n        at4.xyz = mix(at4.xyz, flyer[3].xyz, consumingStage);\r\n    } else {\r\n      at4 = vec4(1e6);\r\n    }\r\n  }\r\n\r\n  //int si = int(shape);\r\n\r\n  /*if(vshape > 0)\r\n    //vcolor.rgb = vec3(shape/10000., mod(shape,100.)/100., mod(shape,10.)/10.) * 1.5;\r\n    vcolor.rgb = vec3(1.);\r\n  else\r\n    vcolor.rgb = vec3(.9);*/\r\n  //color = vec4(1., 1., 0., 1.);\r\n\r\n\r\n  if(vtype.x == 3) {\r\n    at4 = flyer * at4;\r\n    mat4 fnorm = flyer;\r\n    fnorm[3] = vec4(0.);\r\n    vnorm = normalize((fnorm * vec4(norm, 1.)).xyz);\r\n  }\r\n\r\n  if(vtype.x == 7) {\r\n    int id = vtype.y;\r\n    if(id % 2 == 0) {\r\n      vnorm.y = -vnorm.y;\r\n      at4.y = -at4.y;\r\n    }\r\n    float shift = fract(fract(float(id) / 1e2) + time * 1e-2 * (id % 2 == 1 ? 3. : -3.));\r\n    at4.y = at4.y + 7300. - pow(shift * 120., 2.);\r\n    if(at4.y<0.){\r\n      at4.xz += vec2(rand(float(id))-.5,rand(float(id+1))-.5) * pow(at4.y/1e2,2.) ;\r\n    }\r\n  }\r\n\r\n  vec4 pos;\r\n\r\n  if(vtype.x == 8) {\r\n    pos = at4;\r\n  } else {\r\n    pos = camera * at4;\r\n  }\r\n\r\n  vat = at4.xyz;\r\n  pos.y = -pos.y;\r\n\r\n  vec3 toSun = sun - vat;\r\n  //vec3 toSun = vec3(0, 1000, 0);\r\n  light = dot(vnorm, normalize(toSun)) * 0.2 + .9 - length(toSun) * 1e-6;\r\n\r\n  if(vtype.x == 7) {\r\n    light += 0.2;\r\n  }\r\n\r\n  dist = distance(vat, flyer[3].xyz);\r\n\r\n  gl_Position = pos;\r\n}\r\n";
+  var vMain_default = "uniform mat4 camera;\r\nuniform mat4 flyer;\r\nuniform vec3 sun;\r\nuniform float time;\r\nuniform int consuming;\r\nuniform float consumingStage;\r\n\r\nuniform int liveDebris[32];\r\n\r\nin vec3 at;\r\nin vec3 up;\r\nin vec3 norm;\r\nin vec3 cell;\r\nin vec4 type;\r\nin float shape;\r\n\r\nout vec3 vcell;\r\nout vec3 vat;\r\nout float dist;\r\nflat out float light;\r\n\r\nflat out vec3 vnorm;\r\nflat out vec4 vcolor;\r\n\r\nflat out ivec4 vtype;\r\nflat out int vshape;\r\n\r\nfloat rand(float n){return fract(sin(n) * 43758.5453123);}\r\n\r\nmat4 axisRotation(vec3 axis, float angle) {\r\n\r\n  float x = axis.x;\r\n  float y = axis.y;\r\n  float z = axis.z;\r\n\r\n  float n = sqrt(x * x + y * y + z * z);\r\n  x /= n;\r\n  y /= n;\r\n  z /= n;\r\n  float c = cos(angle);\r\n  float s = sin(angle);\r\n  float omc = 1. - c;\r\n\r\n  return mat4(x * x + (1. - x * x) * c, x * y * omc + z * s, x * z * omc - y * s, 0., x * y * omc - z * s, y * y + (1. - y * y) * c, y * z * omc + x * s, 0., x * z * omc + y * s, y * z * omc - x * s, z * z + (1. - z * z) * c, 0., 0., 0., 0., 1.);\r\n}\r\n\r\nvoid main() {\r\n  vat = at;\r\n  vnorm = norm;\r\n  vcell = cell;\r\n\r\n  vtype = ivec4(type);\r\n  vshape = int(shape);\r\n\r\n  vec4 at4 = vec4(at+up*0., 1.);\r\n\r\n  vcolor.rgb = vec3(1.);\r\n\r\n  if(vtype.x == 9) {\r\n    int swarm = vshape/32;\r\n    bool live = (liveDebris[swarm/30] & (1 << swarm%30)) != 0;\r\n    if(live || consuming == swarm){\r\n      vcolor.rgb = vec3(1.,0.,1.);\r\n      float a = rand(shape);\r\n      vec3 axis = normalize(vec3(rand(a+1.), rand(a+2.), rand(a+3.)));\r\n      light -= a*0.3; \r\n      mat4 rot = axisRotation(axis, time * 5. * (.5+rand(a+4.)) + rand(a+4.) );\r\n      vnorm = normalize((rot * vec4(norm, 1.)).xyz);\r\n      at4 = rot * at4;\r\n      at4.xyz += 25. * (vec3(rand(a+5.), rand(a+6.), rand(a+7.)) - .5);\r\n      at4.xyz += vec3(vtype.yzw);\r\n      at4.xyz += up * sin(float(swarm) + time*0.1) * 20.;\r\n      if(consuming == swarm)\r\n        at4.xyz = mix(at4.xyz, flyer[3].xyz, consumingStage);\r\n    } else {\r\n      at4 = vec4(1e6);\r\n    }\r\n  }\r\n\r\n  if(vtype.x == 3) {\r\n    at4 = flyer * at4;\r\n    mat4 fnorm = flyer;\r\n    fnorm[3] = vec4(0.);\r\n    vnorm = normalize((fnorm * vec4(norm, 1.)).xyz);\r\n  }\r\n\r\n  if(vtype.x == 7) {\r\n    int id = vtype.y;\r\n    if(id % 2 == 0) {\r\n      vnorm.y = -vnorm.y;\r\n      at4.y = -at4.y;\r\n    }\r\n    float shift = fract(fract(float(id) / 1e2) + time * 1e-2 * (id % 2 == 1 ? 3. : -3.));\r\n    at4.y = at4.y + 7300. - pow(shift * 120., 2.);\r\n    if(at4.y<0.){\r\n      at4.xz += vec2(rand(float(id))-.5,rand(float(id+1))-.5) * pow(at4.y/1e2,2.) ;\r\n    }\r\n  }\r\n\r\n  vec4 pos;\r\n\r\n  if(vtype.x == 8) {\r\n    pos = at4;\r\n  } else {\r\n    pos = camera * at4;\r\n  }\r\n\r\n  vat = at4.xyz;\r\n  pos.y = -pos.y;\r\n\r\n  vec3 toSun = sun - vat;\r\n  light = dot(vnorm, normalize(toSun)) * 0.2 + .9 - length(toSun) * 1e-6;\r\n\r\n  if(vtype.x == 7) {\r\n    light += 0.2;\r\n  }\r\n\r\n  dist = distance(vat, flyer[3].xyz);\r\n\r\n  gl_Position = pos;\r\n}\r\n";
 
   // src/shaders.ts
   var shaders = {fMain: fMain_default, vMain: vMain_default, fScreen: fScreen_default, vScreenQuad: vScreenQuad_default};
@@ -895,6 +896,8 @@ ${body}`;
   }
   var rng = RNG(Math.random());
   function node(note, dur = 3, vol = 1) {
+    if (!ax)
+      return;
     let [o, g] = og();
     g.gain.setValueAtTime(volume * vol * 44 / key(note), ax.currentTime);
     o.frequency.setValueAtTime(key(note), ax.currentTime);
@@ -915,10 +918,25 @@ ${body}`;
   var rad = Math.PI / 180;
   var InitialRot = [90, 0];
   var mouseDelta = [0, 0];
-  var gs;
+  var gs = {};
   var MaxTimeout = 10;
-  function init2(debris) {
-    gs = {
+  var Radius = 0;
+  var Acceleration = 1;
+  var Turning = 2;
+  var Timeout = 3;
+  var ComboStart = 4;
+  var Durability = 5;
+  var UpgradeNames = [
+    "Extend collection radius",
+    "Accelerate and brake faster",
+    "Turn faster",
+    "Longer combo timer",
+    "Bigger starting combo multiplier",
+    "Less combo loss on collisions"
+  ];
+  var liveDebris = new Int32Array(32);
+  function init2() {
+    Object.assign(gs, {
       dir: [1, 0, 0],
       at: [0, -300, 0],
       vel: 0.05,
@@ -929,14 +947,17 @@ ${body}`;
       consuming: -1,
       consumingStage: 0,
       debris,
-      liveDebris: new Int32Array(32),
+      liveDebris,
       debrisLeft: 0,
       combo: 0,
       timeout: 0,
       timeoutSpeed: 0,
       speedBonus: 0,
-      score: 0
-    };
+      score: 0,
+      upgrades: [0, 0, 0, 0, 0, 0],
+      points: 0,
+      level: 0
+    });
     for (let d of gs.debris) {
       let live = rng2(2);
       d.live = live ? true : false;
@@ -947,6 +968,13 @@ ${body}`;
   var rng2 = RNG(1);
   function update(dTime) {
     gs.time += dTime;
+    while (scoreForNextLevel() <= gs.score) {
+      notify("LEVEL UP!", 2);
+      gs.level++;
+      gs.points++;
+      for (let i = 0; i < 12; i++)
+        setTimeout(() => node(i), i * 100);
+    }
     if (dTime > rng2()) {
       let d = gs.debris[rng2(gs.debris.length)];
       d.live = !d.live;
@@ -959,13 +987,13 @@ ${body}`;
       gs.timeoutSpeed = 0;
       gs.combo = 0;
     }
-    let velDelta = ((keyPressed[0] ? 1 : 0) + (keyPressed[2] ? -1 : 0)) * dTime * 0.3;
+    let velDelta = ((keyPressed[0] ? 1 : 0) + (keyPressed[2] ? -1 : 0)) * dTime * (0.15 + gs.upgrades[Acceleration] * 0.1);
     gs.vel += Math.max(velDelta, -gs.vel);
     gs.speedBonus = Math.min(gs.speedBonus + dTime / 10, gs.vel);
     mouseDelta = mouseDelta.map((d) => Math.sign(d) * Math.min(30, Math.abs(d) * dTime * 6e4));
     gs.drot[X] = gs.drot[X] - mouseDelta[X] * 0.1;
     gs.drot[Y] = Math.max(-89.999, Math.min(89.999, gs.drot[1] - mouseDelta[1] * 0.1));
-    let turn = Math.min(1, dTime * 10);
+    let turn = Math.min(1, dTime * (7 + gs.upgrades[Turning] * 3));
     gs.smoothDrot = gs.smoothDrot.map((prevSmooth, i) => prevSmooth * (1 - turn) + gs.drot[i] * turn);
     gs.rot = sum22(gs.rot, gs.smoothDrot, 6e-3);
     gs.rot[Y] = Math.max(-89, Math.min(gs.rot[Y], 89));
@@ -981,7 +1009,7 @@ ${body}`;
     gs.at = sum(gs.at, delta);
     gs.debris.forEach((d, i) => {
       let at = sum(d.at, scale(d.up, Math.sin(d.ind + gs.time * 0.1) * 20));
-      if (d.live && dist(at, gs.at) < 30) {
+      if (d.live && dist(at, gs.at) < 30 + gs.upgrades[Radius] ** 0.4 * 10) {
         consume(d);
       }
     });
@@ -1001,8 +1029,11 @@ ${body}`;
           let crashAngle = -mul(norm2, gs.dir);
           let damage = crashAngle * gs.vel;
           console.log("DAMAGE", damage);
-          gs.combo -= damage;
-          gs.timeout -= damage;
+          damage -= gs.upgrades[Durability] * 0.05;
+          if (damage > 0) {
+            gs.combo -= damage;
+            gs.timeout -= damage;
+          }
           if (crashAngle > 0) {
             node(rng2(20) - 60, crashAngle * 10, crashAngle ** 2);
             gs.at = sumvn(gs.at, norm2, gs.vel * crashAngle * proximity / 2);
@@ -1020,9 +1051,8 @@ ${body}`;
     gs.consuming = d.ind;
     gs.consumingStage = 0;
     gs.combo += 1;
-    gs.timeoutSpeed += 0.1;
+    gs.timeoutSpeed += 0.1 / (1 + 0.3 * gs.upgrades[Timeout]);
     gs.timeout = MaxTimeout;
-    console.log("gain", d.score);
     gs.score += gain;
     updateLiveDebris();
   }
@@ -1051,18 +1081,40 @@ ${body}`;
         gs.debrisLeft++;
       }
     }
+    if (gs.time > 1)
+      saveToSlot(0);
   }
   function relativeTimeout() {
     return gs.timeout / MaxTimeout;
   }
   function comboMultiplier() {
-    return ~~(10 + gs.combo) / 10;
+    return ~~(10 + ~~(gs.upgrades[ComboStart] * 3.334) + gs.combo) / 10;
   }
   function cleanCityMultiplier() {
     return ~~(MaxDebris / gs.debrisLeft * 5) / 10;
   }
   function speedMultiplier() {
     return 1 + 0.1 * ~~(gs.speedBonus ** 2 * 100);
+  }
+  function save() {
+    let save2 = {...gs};
+    delete save2.liveDebris;
+    save2.debris = save2.debris.map((d) => d.live ? 1 : 0).join("");
+    save2.date = new Date().toLocaleString();
+    return JSON.stringify(save2);
+  }
+  function load(s) {
+    if (!s)
+      return;
+    let liveDebris2 = gs.liveDebris, debris2 = gs.debris;
+    Object.assign(gs, JSON.parse(s));
+    gs.debris.split().forEach((v4, i) => debris2[i].live = v4 == "1");
+    gs.liveDebris = liveDebris2;
+    gs.debris = debris2;
+    updateLiveDebris();
+  }
+  function scoreForNextLevel() {
+    return (gs.level + 1) * (gs.level + 2) * 500;
   }
 
   // src/render.ts
@@ -1076,16 +1128,20 @@ ${body}`;
   var cx2d;
   var notifications = [];
   var smoothScore = 0;
-  function notify(text) {
-    notifications.push({text, at: [viewSize[X] * (Math.random() * 0.2 + 0.4), viewSize[Y] / 2]});
+  var O;
+  function notify(text, importance = 1) {
+    notifications.push({text, at: [viewSize[X] * (Math.random() * 0.2 + 0.4), viewSize[Y] / 2], importance});
   }
   function init3(size) {
     let C = document.getElementById("C");
     let D = document.getElementById("D");
+    O = document.getElementById("O");
     viewSize = size;
     C.width = D.width = viewSize[X];
     C.height = D.height = viewSize[Y];
-    D.style.marginTop = `${-viewSize[Y]}px`;
+    O.style.marginTop = D.style.marginTop = `${-viewSize[Y]}px`;
+    C.style.width = D.style.width = O.style.width = `${viewSize[X]}px`;
+    C.style.height = D.style.height = O.style.height = `${viewSize[Y]}px`;
     context(C);
     cx2d = D.getContext("2d");
     cx2d.fillStyle = "#fff";
@@ -1095,9 +1151,9 @@ ${body}`;
     pScreenUniform = uniforms(pScreen);
     textures2 = textures([TEX_RGBA, TEX_RGBA, TEX_DEPTHS], viewSize);
     framebuffer2 = framebuffer(textures2);
-    return [pMain, C];
+    return [C, O];
   }
-  var crashPoints = [[-1, 1, -1], [1, 1, -1], [0, 1, -1]];
+  var crashPoints = [[-0.8, 1, -1], [0.8, 1, -1], [0, 1, -1]];
   var rng3 = RNG(1);
   function write(text, x, y) {
     cx2d.fillText(text, x, y);
@@ -1122,9 +1178,8 @@ ${body}`;
     cx2d.font = "bold 32pt Courier";
     for (let n of notifications) {
       write(n.text, n.at[X], n.at[Y]);
-      n.at[Y] -= dTime * 300;
+      n.at[Y] -= dTime * 300 / (n.importance || 1);
     }
-    I.innerHTML = `cs ${gs2.consuming} ${gs2.consumingStage} ${relativeTimeout()} combo ${gs2.combo} debris left ${gs2.debrisLeft} speed bonus ${speedMultiplier()} timeout ${gs2.timeout} timeout speed ${gs2.timeoutSpeed} `;
     let time = gs2.time;
     let [camera, perspective2, look] = viewMatrices(sum(sum(gs2.at, scale(gs2.dir, -5)), [0, 0, 0]), gs2.dir, viewSize, PI / 4, [4, cityDepth + dist2(gs2.at, [0, cityDepth * 0.5, 0])]);
     let invCamera = inverse(camera);
@@ -1186,6 +1241,42 @@ ${body}`;
     gl.readBuffer(COLOR_ATTACHMENT1);
     await Promise.all(rangef(3, (n) => readPixelsAsync(screenCrashPoints[n][X], screenCrashPoints[n][Y], 1, 1, RGBA, UNSIGNED_BYTE, crashPixel[n])));
   }
+  function renderUI(gs2) {
+    if (!gs2) {
+      O.style.visibility = "hidden";
+      return;
+    }
+    O.style.visibility = "visible";
+    let saves = [];
+    for (let slot = 0; slot < 10; slot++) {
+      let save2 = localStorage["warpStation13K-" + slot];
+      if (!save2 && slot > 0)
+        break;
+      let parsed = save2 ? JSON.parse(save2) : {};
+      saves.push(`${parsed.score || "0"}pts ${parsed.date || ""}`);
+    }
+    if (saves.length < 10)
+      saves.push("New Save");
+    O.innerHTML = `
+  <H1>Warp Station 13K</H1>
+  <p>Score: ${gs2.score}/${scoreForNextLevel()} Level: ${gs2.level} Upgrade points: ${gs2.points}</p>
+  <H3>Upgrades</H3>
+    ${UpgradeNames.map((v4, i) => `
+      <span class="u">${v4}</span>
+      <button id="down_${i}">-</button>
+      <span class="up">${gs2.upgrades[i]}</span>
+      <button id="up_${i}">+</button><br/>`).join("")}
+  <H3>Saves</H3>
+  <button id="new">New Game</button><br/><br/>
+  ${saves.map((v4, i) => `
+  <div>    
+    <button style="visibility:${i != 0 ? "" : "hidden"}" id="save_${i}">Save</button>
+    <span class="si">${i ? i : "Auto"}</span>
+    <span class="st">${v4}</span>    
+    <button style="visibility:${v4 != "New Save" ? "" : "hidden"}" id="load_${i}" class="lb">Load</button>
+    </div>
+  `).join("")}`;
+  }
 
   // src/prog.ts
   var noiseGain;
@@ -1194,20 +1285,20 @@ ${body}`;
   function main() {
     const viewSize2 = [1200, 800];
     let startTime = Date.now();
-    let [world, flyer, debris] = initGeometry();
-    let [pMain2, C] = init3(viewSize2);
+    let [world, flyer] = initGeometry();
+    let [C, O2] = init3(viewSize2);
     initControls();
-    let state = init2(debris);
+    let gs2 = init2();
     let [bufs, elements] = putShapesInElementBuffers(world, attributes);
     let [bufsF, elementsF] = putShapesInElementBuffers(flyer, attributes);
     console.log(`${Date.now() - startTime} ms ${elements.faces.length} faces`);
     let t = 0;
     function update2(dTime) {
       update(dTime);
-      frame(state, [bufs, elements], [bufsF, elementsF], dTime);
+      frame(gs2, [bufs, elements], [bufsF, elementsF], dTime);
       if (noiseGain) {
-        noiseGain.gain.value = state.vel * noiseVol * 0.7;
-        if (dTime * state.vel * 10 > Math.random()) {
+        noiseGain.gain.value = gs2.vel * noiseVol * 0.7;
+        if (dTime * gs2.vel * 10 > Math.random()) {
           noiseVol = 0.5 + Math.random();
         }
         noiseVol = noiseVol * (1 - dTime) + dTime;
@@ -1231,10 +1322,50 @@ ${body}`;
       }
       started = true;
     };
+    O2.onclick = (e) => {
+      let id = e.target.id;
+      let [cmd, n] = id.split("_");
+      switch (cmd) {
+        case "up":
+          if (gs2.points > 0) {
+            gs2.upgrades[n]++;
+            gs2.points--;
+          }
+          break;
+        case "down":
+          if (gs2.upgrades[n] > 0) {
+            gs2.upgrades[n]--;
+            gs2.points++;
+          }
+          break;
+        case "save":
+          saveToSlot(n);
+          break;
+        case "load":
+          loadSlot(n);
+          renderUI(null);
+          update2(0);
+          setTimeout(() => togglePlaying(true), 10);
+          break;
+        case "new":
+          init2();
+          renderUI(null);
+          update2(0);
+          setTimeout(() => togglePlaying(true), 10);
+          break;
+      }
+      renderUI(gs2);
+    };
     document.onkeydown = (e) => {
       switch (e.code) {
         case "Space":
           togglePlaying();
+          break;
+        case "KeyS":
+          saveToSlot(0);
+          break;
+        case "KeyL":
+          loadSlot(0);
           break;
       }
     };
@@ -1246,12 +1377,24 @@ ${body}`;
         on = !playing();
       if (on) {
         C.requestPointerLock();
+        renderUI(null);
       } else {
         document.exitPointerLock();
-        noiseGain.gain.value = 0;
+        if (noiseGain)
+          noiseGain.gain.value = 0;
+        renderUI(gs2);
       }
     }
+    loadSlot(0);
     update2(0);
+    togglePlaying(false);
+  }
+  var settings = localStorage.warpStation13K || {slot: 0};
+  function saveToSlot(slot) {
+    localStorage["warpStation13K-" + slot] = save();
+  }
+  function loadSlot(slot) {
+    load(localStorage["warpStation13K-" + slot]);
   }
   main();
 })();

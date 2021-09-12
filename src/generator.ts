@@ -31,7 +31,9 @@ export function putShapesInBuffers(shapes: any, prog: WebGLProgram, conf: any) {
   return [bufs, elements] as [g0.ShapeBuffers, shape.Elements];
 }
 
-export type Debris = shape.Vert & { live: boolean, up:v3.Vec3, score:number };
+export type Debris = shape.Vert & { live: boolean, up: v3.Vec3, score: number };
+
+export let debris: Debris[] = [];
 
 export function initGeometry() {
 
@@ -69,14 +71,13 @@ export function initGeometry() {
   shape.setType(ui, v => [FIXED, 0, 0, 0])
   world.push(ui);*/
 
-  let debris: Debris[] = [];
   while (debris.length < MaxDebris) {
     let building = buildings[rng(buildings.length)];
     if (building && building.height * rng() < building.density && building.density > 0.4) {
       let score = ~~((building.density / (building.height + 10) * 400) ** 2 + 1);
       let at = lastOf(building.verts).at;
-      let up = v3.sub(at, building.verts[building.verts.length-2].at);
-      let d = { ind: debris.length, at, up, live: true, score } as Debris;      
+      let up = v3.sub(at, building.verts[building.verts.length - 2].at);
+      let d = { ind: debris.length, at, up, live: true, score } as Debris;
       debris.push(d)
     }
   }
@@ -107,7 +108,7 @@ export function initGeometry() {
     s.common.shape = s.common.shape || i;
   }
 
-  return [solid, passable, debris] as [Shape[], Shape[], Debris[]];
+  return [solid, passable] as [Shape[], Shape[]];
 }
 
 function flyerGeometry() {
@@ -127,18 +128,27 @@ function flyerGeometry() {
   ts(engine2, m4.reflection([1, 0, 0]));
   shape.invert(engine2);
 
-  let body = shape.towerMesh(
+  /*let body = shape.towerMesh(
     shape.smoothPolyFixed([[1, -4], [1, 7], [0, 10], [-1, 7], [-1, -4]], 1),
     [[0, 1], [0.8, 1], [1, 2], [1, 3], [0.4, 4], [0, 4]]
-  )
-  ts(body, m4.translation([0, 2, 3.5]));
+  )*/
+  let body = shape.towerMesh(rangef(32, shape.revolutionShader(32)),
+    [[0, 0], [3.9, 0], [4, 0.1], [4, .9], [3.9, 1], [0, 1]]
+  );
+  ts(body, m4.translation([0, 2.5, 5.5]));
 
-  let flyer = shape.combine([body, wing, engine, engine2])
+  let body2 = shape.towerMesh(rangef(32, shape.revolutionShader(32)),
+    [[0, 0], [.9, 0], [1, 0.1], [1, .9], [.9, 1], [0, 1]]
+  );
+  ts(body2, m4.translation([0, 4, 6]));
+
+
+  let flyer = shape.combine([body, body2, wing, engine, engine2])
 
   flyer.common = { type: [FLYER, 0, 0, 0] };
 
   ts(flyer,
-    m4.scaling(0.2),
+    m4.scaling(0.18),
     m4.axisRotation([0, -1, 0], Math.PI),
     m4.axisRotation([-1, 0, 0], Math.PI / 2),
     m4.translation([0, 2, 0])
@@ -290,9 +300,9 @@ function generateBuildings(rng: Rng) {
         heights[s] = height;
 
 
-      let poiH = height + rng()*10 + 30;
+      let poiH = height + rng() * 10 + 30;
       //POI
-      building.verts.push({ at: [0, 0, poiH-1] as v3.Vec3, ind: building.verts.length });
+      building.verts.push({ at: [0, 0, poiH - 1] as v3.Vec3, ind: building.verts.length });
       building.verts.push({ at: [0, 0, poiH] as v3.Vec3, ind: building.verts.length });
     }
   }

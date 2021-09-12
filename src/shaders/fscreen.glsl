@@ -20,7 +20,6 @@ float Noise2d(in vec2 x) {
   return fract(415.92653 * (xhash + yhash));
 }
 
-int b16[16] = int[] (1, 9, 3, 11, 13, 5, 15, 7, 4, 12, 2, 10, 16, 8, 14, 6);
 int b64[64] = int[] (1, 33, 9, 41, 3, 35, 11, 43, 49, 17, 57, 25, 51, 19, 59, 27, 13, 45, 5, 37, 15, 47, 7, 39, 61, 29, 53, 21, 63, 31, 55, 23, 4, 36, 12, 44, 2, 34, 10, 42, 52, 20, 60, 28, 50, 18, 58, 26, 16, 48, 8, 40, 14, 46, 6, 38, 64, 32, 56, 24, 62, 30, 54, 22);
 
 float dither(float v, ivec2 F) {
@@ -41,26 +40,6 @@ void main() {
 
   vec4 pos4 = invCamera * screenPos;
   vec3 pos = (pos4 / pos4.w).xyz - flyer[3].xyz;
-
-  /*if(distance(vec2(scp0.x, scp0.y), vec2(F)) < 10.) {
-    color = vec4(1., 0., 0., 1.);
-    return;
-  }
-
-  if(distance(vec2(scp1.x, scp1.y), vec2(F)) < 10.) {
-    color = vec4(0., 1., 0., 1.);
-    return;
-  }
-
-  if(distance(vec2(scp2.x, scp2.y), vec2(F)) < 10.) {
-    color = vec4(0., 0., 1., 1.);
-    return;
-  }*/
-
-  /*if(F.y < 4 && F.x < 4) {
-    color = vec4(texelFetch(Depth, ivec2(scp0.xy), 0).r < collisionDepth ? 1. : 0., texelFetch(Depth, ivec2(scp1.xy), 0).r < collisionDepth ? 1. : 0., texelFetch(Depth, ivec2(scp2.xy), 0).r < collisionDepth ? 1. : 0., 1.);
-    return;
-  }*/
 
   color = texelFetch(T0, F, 0);
 
@@ -101,10 +80,9 @@ void main() {
       diff += abs(edge);
     }
 
-    if(depth > 0.99)
-      diff *= 1. + (depth - 0.99);
+    diff *= depth;
 
-    if(diff > .00005) {
+    if(diff > .00007) {
       color.rgb = normalize(color.rgb) * 0.3;
     } else {
       if(ditherOn) {
