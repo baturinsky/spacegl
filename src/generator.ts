@@ -86,8 +86,11 @@ export function initGeometry() {
     let ad = { ind: ads.length, at, up } as Debris;
     ads.push(ad)
 
-    let w = 5 + rng(5), h = 20 + rng(10);
-    let adShape = shape.towerMesh([[-w, -1], [w, -1], [w, 1], [-w, 1]], [[0, 0], [1, 0], [1, h], [0, h]]);
+    let w = 5 + rng(5), h = 30 + rng(20);
+    let adShape = shape.towerMesh(
+      [[-w, -1], [w, -1], [w, 1], [-w, 1]], 
+      [[0, 0], [1.2, 0], [1.2,0.1*h], [1,0.15*h], [1, 0.85*h], [1.2, 0.9*h], [1.2,h], [0, h]]
+    );
     ts(adShape, m4.axisRotation([0, 1, 0], (spot % cityCols) / cityCols * PI2));
     adShape.common = {
       type: [AD, ...ad.at],

@@ -80,6 +80,7 @@ void main() {
   if(vtype.x == 10) {
     if(vshape % 2 == 0) {
       mat4 rot = axisRotation(up, time);
+      vnorm = normalize((rot * vec4(norm, 1.)).xyz);
       at4 = rot * at4;
     } else {
       at4.xyz += up * sin(float(vshape) + time) * 20.;

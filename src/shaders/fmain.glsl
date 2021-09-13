@@ -75,15 +75,18 @@ void main() {
   } else if(itype == 5) {
     bright = 2.;
   } else if(itype == 10) {
-    if(vcell.y>1.1 && vcell.y<1.9 && (vcell.x>.1 && vcell.x < .9 || vcell.x>2.1 && vcell.x < 2.9)){
+    if(mod(vcell.y, 2.) > 1. && mod(vcell.x, 2.) < 1.){
       float x = fract(vcell.x);
       float y = fract(vcell.y);
-      float fullCols = 3. + floor(rand(shape)*3.);
-      float col = floor((x-0.1)/0.8*(fullCols * 4. - 1.));
-      float row = floor((y * 15. - time*5.) * (1. + rand(shape*1e3)));
-      bright = mod(row,4.) == 3. || mod(col,4.) == 3. ||  rand(floor(row + col*100. + shape))>0.8?1.:0.;
-      if(rand(shape*1e2) > 0.5)
-        bright = 1. - bright;
+      if(y>.1 && y<.9 && x>.1 && x< .9){
+        bool main = floor(vcell.y)==3.;
+        float fullCols = (3. + floor(rand(shape)*3.)) * (main?1.:3.);
+        float col = floor((x-0.1)/0.8*(fullCols * 4. - 1.));
+        float row = floor((y * 15. - (main?time:0.)*5.) * (1. + rand(shape*1e3)));
+        bright = mod(row,4.) == 3. || mod(col,4.) == 3. ||  rand(floor(row + col*100. + shape))>0.8?1.:0.;
+        if(rand(shape*1e2) > 0.5)
+          bright = 1. - bright;
+      }
     }
   } else if(itype == 7) {
     float y = fract(vcell.y);
